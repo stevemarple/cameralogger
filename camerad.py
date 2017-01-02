@@ -9,6 +9,7 @@ import numpy as np
 import os
 from scipy.stats import trim_mean
 import signal
+import six
 import struct
 import sys
 import threading
@@ -16,6 +17,7 @@ import time
 import traceback
 import zwoasi as asi
 
+import aurorawatchnet as awn
 
 if sys.version_info[0] >= 3:
     import configparser
@@ -24,21 +26,53 @@ else:
     import ConfigParser
     from ConfigParser import SafeConfigParser
 
-import aurorawatchnet as awn
-import aurorawatchnet.message
+
 
 logger = logging.getLogger(__name__)
 
 camera = None
 
 
-def run_camera():
-    global camera
+def read_config_file(filename):
+    """Read config file."""
+    logger.info('Reading config file ' + filename)
 
-    # This should be called after dropping root privileges because
-    # it uses safe_eval to convert strings to numbers or
-    # lists (not guaranteed safe!)
-    camera = get_camera(config)
+    config = SafeConfigParser()
+
+    config.add_section('daemon')
+    # The configuration file is the same for the original
+    # AuroraWatchNet magnetometer system (Calunium microcontroller,
+    # Raspberry Pi or other data logger) or the Raspberry Pi
+    # magnetometer system (sensors connected directly to Raspberry
+    # Pi). These systems are supported by two different daemons,
+    # awnetd and raspmagd.
+    config.set('daemon', 'name', 'awnetd')
+
+    config.set('daemon', 'user', 'pi')
+    config.set('daemon', 'group', 'pi')
+    config.set('daemon', 'sampling_interval', '30')
+
+
+    config.add_section('upload')
+    # User must add appropriate values
+
+    # Monitor for the existence of a file to indicate possible adverse
+    # data quality
+    config.add_section('dataqualitymonitor')
+    config.set('dataqualitymonitor', 'extension', '.bad')
+    config.set('dataqualitymonitor', 'username', 'pi')
+    config.set('dataqualitymonitor', 'group', 'dialout')
+
+    if filename:
+        config_files_read = config.read(filename)
+        if filename not in config_files_read:
+            raise UserWarning('Could not read ' + filename)
+        logger.debug('Successfully read ' + ', '.join(config_files_read))
+
+    return config
+
+
+def init_camera(camera):
     controls = camera.get_controls()
     camera.start_video_capture()
     camera.set_control_value(asi.ASI_GAIN,
@@ -52,6 +86,47 @@ def run_camera():
     camera.set_control_value(asi.ASI_GAMMA, 50)
     camera.set_control_value(asi.ASI_BRIGHTNESS, 50)
     camera.set_image_type(asi.ASI_IMG_RGB24)
+    time.sleep(2)
+
+
+def get_control_values(camera):
+    controls = camera.get_controls()
+    print(controls)
+    r = {}
+    for k in controls:
+        r[k] = camera.get_control_value(controls[k]['ControlType'])[0]
+
+    # Fix up certain keys
+    if 'Exposure' in r:
+        r['Exposure'] = '%.6f' % (r['Exposure'] / 1000000.0)
+    if 'Temperature' in r:
+        r['Temperature'] = '%.1f' % (r['Temperature']/10.0)
+    if 'Flip' in r:
+        r['Flip'] = {0: 'None', 1: 'Horizontal', 2: 'Vertical', 3: 'Both'}[r['Flip']]
+
+    # Convert any remaining non-string types to string
+    for k, v in r.iteritems():
+        if isinstance(v, six.string_types):
+            pass
+        elif isinstance(v, float):
+            r[k] = '.1f' % v
+        else:
+            r[k] = str(v)
+
+    print('#######')
+    print(r)
+    return r
+
+
+def run_camera():
+    global camera
+
+    # This should be called after dropping root privileges because
+    # it uses safe_eval to convert strings to numbers or
+    # lists (not guaranteed safe!)
+    camera = get_camera(config)
+    init_camera(camera)
+
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
 
@@ -160,37 +235,10 @@ def get_camera(config):
     return asi.Camera(0)
 
 
-def get_aggregate_function(config, section, option):
-    to_func = {'mean': np.mean,
-               'median': np.median,
-               'tmean_20pc': lambda x : trim_mean(x, 0.2),
-               'tmean_25pc': lambda x : trim_mean(x, 0.25),
-               'tmean_33pc': lambda x : trim_mean(x, 1.0/3),
-               }
-    
-    if config.has_option(section, option):
-        s = config.get(section, option)
-        if s in to_func:
-            return to_func[s]
-        else:
-            raise Exception('Unknown aggregate function: ' + s)
-    else:
-        return to_func['mean']
-
-
-def voltage_to_deg_C(voltage, offset, scale):
-    return (voltage - offset) / scale
-
-
-def voltage_to_tesla(voltage, sensitivity=20000):
-    # sensitivity in V/T
-    return voltage / float(sensitivity)
-               
-              
 def capture():
     global camera
     t = time.time()
-    img_info = camera.get_controls()
+    img_info = get_control_values(camera)
     img = camera.capture_video_frame()
     img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
     print(repr(img_info))
@@ -292,7 +340,8 @@ def record_image():
     cv2.imwrite(filename, img)
     logger.debug('wrote %s', filename)
     with open(info_filename, 'w') as fh:
-        fh.write(repr(img_info))
+        for k in sorted(img_info.keys()):
+            fh.write('%s: %s\n' % (k, str(img_info[k])))
     # if config.has_option('awnettextdata', 'filename'):
     #     write_to_txt_file(img, ext)
     #
@@ -388,7 +437,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    config = awn.read_config_file(args.config_file)
+    config = read_config_file(args.config_file)
     logging.basicConfig(level=getattr(logging, args.log_level.upper()),
                         format=args.log_format, datefmt='%Y-%m-%dT%H:%M:%SZ')
 
