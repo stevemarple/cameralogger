@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 
 import argparse
-import copy
+import astral
 import cv2
+import datetime
 import glob
 import logging
+import lxml.etree as ET
 import numpy as np
+import operator
 import os
+import requests
 from scipy.stats import trim_mean
 import signal
 import six
@@ -17,7 +21,6 @@ import time
 import traceback
 import zwoasi as asi
 
-import aurorawatchnet as awn
 
 if sys.version_info[0] >= 3:
     import configparser
@@ -26,32 +29,28 @@ else:
     import ConfigParser
     from ConfigParser import SafeConfigParser
 
-
-
 logger = logging.getLogger(__name__)
 
 camera = None
-
+default_sampling_interval = 120
+sampling_interval = default_sampling_interval
 
 def read_config_file(filename):
     """Read config file."""
     logger.info('Reading config file ' + filename)
-
     config = SafeConfigParser()
 
-    config.add_section('daemon')
-    # The configuration file is the same for the original
-    # AuroraWatchNet magnetometer system (Calunium microcontroller,
-    # Raspberry Pi or other data logger) or the Raspberry Pi
-    # magnetometer system (sensors connected directly to Raspberry
-    # Pi). These systems are supported by two different daemons,
-    # awnetd and raspmagd.
-    config.set('daemon', 'name', 'awnetd')
+    #config.add_section('DEFAULT')
+    #config.set('daemon', 'sampling_interval', '30')
 
+
+    config.add_section('daemon')
     config.set('daemon', 'user', 'pi')
     config.set('daemon', 'group', 'pi')
-    config.set('daemon', 'sampling_interval', '30')
 
+    config.add_section('aurorawatchuk')
+    config.set('aurorawatchuk', 'status_url', 'http://aurorawatch-api.lancs.ac.uk/0.2/status/current-status.xml')
+    config.set('aurorawatchuk', 'status_cache', '/home/pi/tmpfs/aurorawatchuk_status.ini')
 
     config.add_section('upload')
     # User must add appropriate values
@@ -70,6 +69,158 @@ def read_config_file(filename):
         logger.debug('Successfully read ' + ', '.join(config_files_read))
 
     return config
+
+
+def get_config_option(config, section, option,
+                      default=None,
+                      fallback_section=None,
+                      get=None):
+    sec = None
+    read_file = False
+    if config.has_option(section, option):
+        sec = section
+    elif fallback_section and config.has_option(fallback_section, option):
+        sec = fallback_section
+    else:
+        return default
+
+    if get is None:
+        return config.get(sec, option)
+    else:
+        # For 'getboolean' etc
+        return getattr(config, get)(sec, option)
+
+
+def cmp_value_with_option(value, config, section, option, fallback_section='common'):
+    def in_operator(a, b):
+        return a in b
+
+    def not_in_operator(a, b):
+        return a not in b
+
+    ops = {'<': operator.lt,
+           '<=': operator.le,
+           '==': operator.eq,
+           '>': operator.gt,
+           '>=': operator.ge,
+           '!=': operator.ne,
+           'is': operator.is_,
+           'is not': operator.is_not,
+           #'in': lambda(a, b): operator.contains(b,a), # Fix reversed operands
+           #'not in': lambda(a, b): not operator.contains(b,a), # Fix reversed operands
+           'in': in_operator,
+           'not in': not_in_operator,
+           }
+    op_name = get_config_option(config, section, option + '_operator',
+                                default='==',
+                                fallback_section=fallback_section)
+    if op_name not in ops:
+        raise Exception('Unknown operator (%s)' % op_name)
+    if isinstance(value, bool):
+        cast = bool
+    elif isinstance(value, (int, np.int64)):
+        cast = int
+    elif isinstance(value,(float, np.float64)):
+        cast = float
+    else:
+        # Keep as str
+        cast = lambda(x): x
+
+    option_str = get_config_option(config, section, option,
+                                   fallback_section=fallback_section)
+    if op_name in ['in', 'not_in']:
+        conf_value = []
+        for s in option_str.split():
+            conf_value.append(cast(s))
+    else:
+            conf_value = cast(option_str)
+    return ops[op_name](value, conf_value)
+
+
+def get_schedule(config):
+    t = time.time()
+    for sec in config.sections():
+        if sec in ['DEFAULT', 'common', 'daemon']:
+            continue
+        if not config.has_option(sec, 'actions'):
+            continue
+
+        if config.has_option(sec, 'solar_elevation'):
+            latitude = get_config_option(config, sec, 'latitude',
+                                         fallback_section='common', default=0, get='getfloat')
+            longitude = get_config_option(config, sec, 'longitude',
+                                          fallback_section='common', default=0, get='getfloat')
+            val = get_solar_elevation(latitude, longitude, t)
+            if not cmp_value_with_option(val, config, sec, 'solar_elevation', fallback_section='common'):
+                continue
+
+        if config.has_option(sec, 'aurorawatchuk_status'):
+            val = get_aurorawatchuk_status(config)
+            if not cmp_value_with_option(val, config, sec, 'aurorawatchuk_status', fallback_section='common'):
+                continue
+
+        # All tests passed
+        return sec
+
+    return 'common'
+
+
+def get_solar_elevation(latitude, longitude, t):
+    loc = astral.Location(('', '', latitude, longitude, 'UTC', 0))
+    return loc.solar_elevation(datetime.datetime.utcfromtimestamp(t))
+
+
+def get_aurorawatchuk_status(config):
+    # Try to get status from cached value if possible and current
+    filename = config.get('aurorawatchuk', 'status_cache')
+    if os.path.exists(filename):
+        try:
+            cache = SafeConfigParser()
+            cache.read(filename)
+            status = cache.get('status', 'value')
+            expires_str = cache.get('status', 'expires')
+            expires = time.mktime(datetime.datetime.strptime(expires_str, '%a, %d %b %Y %H:%M:%S %Z').utctimetuple())
+            if time.time() < expires:
+                # Present and current
+                return status
+
+        except:
+            logger.error('could not read cached AuroraWatch UK status')
+            logger.debug(traceback.format_exc())
+
+    # Fetch current status
+    url = config.get('aurorawatchuk', 'status_url')
+    status = 'green'
+    try:
+        logger.info('fetching status from %s', url)
+        r = requests.get(url)
+        if r.status_code != 200:
+            raise Exception('could not access %s' % url)
+        xml = r.text
+        xml_tree = ET.fromstring(xml.encode('UTF-8'))
+        if xml_tree.tag != 'current_status':
+            raise Exception('wrong root element')
+        site_status = xml_tree.find('site_status')
+        status = site_status.attrib['status_id']
+        expires = r.headers['Expires']
+
+        # Cache results for next time
+        try:
+            new_cache = SafeConfigParser()
+            new_cache.add_section('status')
+            new_cache.set('status', 'value', status)
+            new_cache.set('status', 'expires', expires)
+            with open(filename, 'w') as fh:
+                new_cache.write(fh)
+        except:
+            logger.error('could not save AuroraWatch UK status to cache file %s', filename)
+            logger.debug(traceback.format_exc())
+
+
+    except:
+        logger.error('could not get AuroraWatch UK status')
+        logger.debug(traceback.format_exc())
+    return status
 
 
 def init_camera(camera):
@@ -91,7 +242,6 @@ def init_camera(camera):
 
 def get_control_values(camera):
     controls = camera.get_controls()
-    print(controls)
     r = {}
     for k in controls:
         r[k] = camera.get_control_value(controls[k]['ControlType'])[0]
@@ -112,14 +262,13 @@ def get_control_values(camera):
             r[k] = '.1f' % v
         else:
             r[k] = str(v)
-
-    print('#######')
-    print(r)
     return r
 
 
 def run_camera():
+    global config
     global camera
+    global sampling_interval
 
     # This should be called after dropping root privileges because
     # it uses safe_eval to convert strings to numbers or
@@ -134,23 +283,19 @@ def run_camera():
         get_log_file_for_time(time.time(), log_filename)
         logger.info('Starting sampling thread')
 
-        do_every(config.getfloat('daemon', 'sampling_interval'),
-                 record_image)
+        do_every(config, record_image)
         while take_samples:
             time.sleep(2)
 
         # Wait until all other threads have (or should have)
         # completed
-        for n in range(int(round(config.getfloat('daemon', 
-                                                 'sampling_interval')))
-                       + 1):
+        for n in range(int(round(sampling_interval)) + 1):
             if threading.activeCount() == 1:
                 break
             time.sleep(1)
 
 
     except Exception as e:
-        print(e)
         get_log_file_for_time(time.time(), log_filename)
         logger.error(traceback.format_exc())
         time.sleep(5)
@@ -202,20 +347,28 @@ def stop_handler(signal, frame):
     camera.close()
 
 
-def do_every (interval, worker_func, iterations = 0):
+def do_every (config, worker_func, iterations = 0):
+    global sampling_interval
     if iterations != 1:
+        # Identify current operating condition to find the actions to do and sampling interval
+        schedule = get_schedule(config)
+        logger.info('using schedule %s', schedule)
+        sampling_interval = get_config_option(config, schedule, 'sampling_interval',
+                                              fallback_section='common',
+                                              default=default_sampling_interval,
+                                              get='getfloat')
         # Schedule the next worker thread. Aim to start at the next
         # multiple of sampling interval. Take current time, add 1.25
         # of the interval and then find the nearest
         # multiple. Calculate delay required.
         now = time.time()
-        delay = round_to(now + (1.25 * interval), interval) - now
+        delay = round_to(now + (1.25 * sampling_interval), sampling_interval) - now
         # Avoid lockups by many threads piling up. Impose a minimum delay
         if delay < 0.1:
             delay = 0.1
         t = threading.Timer(delay,
                             do_every, 
-                            [interval, worker_func, 
+                            [config, worker_func,
                              0 if iterations == 0 else iterations-1])
         t.daemon = True
         t.start()
@@ -241,7 +394,6 @@ def capture():
     img_info = get_control_values(camera)
     img = camera.capture_video_frame()
     img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
-    print(repr(img_info))
 
     # Take CPU temperature as system temperature
     img_info['SystemTemperature'] = 'unknown'
@@ -338,15 +490,10 @@ def record_image():
     filename = time.strftime(filename, tm)
     info_filename = time.strftime(info_filename, tm)
     cv2.imwrite(filename, img)
-    logger.debug('wrote %s', filename)
+    logger.info('saved %s', filename)
     with open(info_filename, 'w') as fh:
         for k in sorted(img_info.keys()):
             fh.write('%s: %s\n' % (k, str(img_info[k])))
-    # if config.has_option('awnettextdata', 'filename'):
-    #     write_to_txt_file(img, ext)
-    #
-    # if config.has_option('raspitextdata', 'filename'):
-    #     write_to_csv_file(img, ext)
 
     return
 
