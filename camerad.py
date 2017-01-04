@@ -173,18 +173,28 @@ def get_solar_elevation(latitude, longitude, t):
     return loc.solar_elevation(datetime.datetime.utcfromtimestamp(t))
 
 
-def get_aurorawatchuk_status(config):
-    # Try to get status from cached value if possible and current
+def get_aurorawatchuk_status(config, use_cache=True):
     filename = config.get('aurorawatchuk', 'status_cache')
-    if os.path.exists(filename):
+    # Try to get status from cached value if possible and current
+    if use_cache and os.path.exists(filename):
         try:
             cache = SafeConfigParser()
             cache.read(filename)
             status = cache.get('status', 'value')
             expires_str = cache.get('status', 'expires')
             expires = time.mktime(datetime.datetime.strptime(expires_str, '%a, %d %b %Y %H:%M:%S %Z').utctimetuple())
-            if time.time() < expires:
+            time_left = expires - time.time()
+            if time_left > 0:
                 # Present and current
+                try:
+                    if time_left < 30:
+                        print('Starting new thread to update status')
+                        thread = threading.Thread(target=get_aurorawatchuk_status,
+                                                  args=(config,),
+                                                  kwargs=dict(use_cache=False))
+                        thread.start()
+                except:
+                    pass
                 return status
 
         except:
