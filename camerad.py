@@ -138,6 +138,9 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
 
 
 def get_schedule(config):
+    if args.schedule is not None:
+        return args.schedule
+
     t = time.time()
     for sec in config.sections():
         if sec in ['DEFAULT', 'common', 'daemon']:
@@ -581,12 +584,18 @@ if __name__ == '__main__':
                         default='%(levelname)s:%(message)s',
                         help='Set format of log messages',
                         metavar='FORMAT')
+    parser.add_argument('--schedule',
+                        help='Override automatic scheduling')
 
     args = parser.parse_args()
 
     config = read_config_file(args.config_file)
     logging.basicConfig(level=getattr(logging, args.log_level.upper()),
                         format=args.log_format, datefmt='%Y-%m-%dT%H:%M:%SZ')
+
+    if (args.schedule is not None and
+            (not config.has_section(args.schedule) or not config.has_option(args.schedule, 'actions'))):
+        raise Exception('%s is not a valid schedule', args.schedule)
 
     log_filename = None
     if config.has_option('logfile', 'filename'):
