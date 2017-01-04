@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 camera = None
 default_sampling_interval = 120
 sampling_interval = default_sampling_interval
+sampling_interval_lock = threading.Lock()
 
 def read_config_file(filename):
     """Read config file."""
@@ -302,7 +303,13 @@ def run_camera():
 
         # Wait until all other threads have (or should have)
         # completed
-        for n in range(int(round(sampling_interval)) + 1):
+        try:
+            sampling_interval_lock.acquire(True)
+            si = sampling_interval
+        finally:
+            sampling_interval_lock.release()
+
+        for n in range(int(round(si)) + 1):
             if threading.activeCount() == 1:
                 break
             time.sleep(1)
@@ -366,16 +373,17 @@ def do_every (config, worker_func, iterations = 0):
         # Identify current operating condition to find the actions to do and sampling interval
         schedule = get_schedule(config)
         logger.info('using schedule %s', schedule)
-        sampling_interval = get_config_option(config, schedule, 'sampling_interval',
-                                              fallback_section='common',
-                                              default=default_sampling_interval,
-                                              get='getfloat')
+
         # Schedule the next worker thread. Aim to start at the next
         # multiple of sampling interval. Take current time, add 1.25
         # of the interval and then find the nearest
         # multiple. Calculate delay required.
         now = time.time()
-        delay = round_to(now + (1.25 * sampling_interval), sampling_interval) - now
+        interval = get_config_option(config, schedule, 'sampling_interval',
+                                     fallback_section='common',
+                                     default=default_sampling_interval,
+                                     get='getfloat')
+        delay = round_to(now + (1.25 * interval), interval) - now
         # Avoid lockups by many threads piling up. Impose a minimum delay
         if delay < 0.1:
             delay = 0.1
@@ -385,6 +393,21 @@ def do_every (config, worker_func, iterations = 0):
                              0 if iterations == 0 else iterations-1])
         t.daemon = True
         t.start()
+
+        # Update the global sampling_interval so that cancel_sampling_threads knows how long to wait.
+        # This could be attempted by multiple capture threads so must use a lock. Don't wait for the lock to be
+        # available.
+        if sampling_interval_lock.acquire(False):
+            try:
+                logger.debug('sampling_interval_lock: acquired lock')
+                sampling_interval = interval
+            finally:
+                logging.debug('sampling_interval_lock: released lock')
+                sampling_interval_lock.release()
+        else:
+            logger.error('sampling_interval_lock: could not acquire lock')
+
+
     try:
         worker_func()
     except Exception as e:
