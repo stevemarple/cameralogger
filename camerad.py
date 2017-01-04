@@ -298,7 +298,7 @@ def run_camera():
         logger.info('Starting sampling thread')
 
         do_every(config, record_image)
-        while take_samples:
+        while take_images:
             time.sleep(2)
 
         # Wait until all other threads have (or should have)
@@ -355,13 +355,13 @@ def cancel_sampling_threads():
     #sys.exit()
 
 
-take_samples = True
+take_images = True
 def stop_handler(signal, frame):
-    global take_samples
+    global take_images
     global camera
     get_log_file_for_time(time.time(), log_filename)
     logger.info('Stopping sampling threads')
-    take_samples = False
+    take_images = False
     cancel_sampling_threads()
     camera.stop_video_capture()
     camera.close()
