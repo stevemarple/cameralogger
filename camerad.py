@@ -314,20 +314,29 @@ def get_aurorawatchuk_status(config, use_cache=True):
     return status
 
 
-def init_camera(camera):
+def init_camera(camera, config):
     controls = camera.get_controls()
     camera.start_video_capture()
-    camera.set_control_value(asi.ASI_GAIN,
-                             controls['Gain']['MinValue'],
-                             auto=True)
-    camera.set_control_value(asi.ASI_EXPOSURE,
-                             controls['Exposure']['MinValue'],
-                             auto=True)
-    camera.set_control_value(asi.ASI_WB_R, 75)
-    camera.set_control_value(asi.ASI_WB_B, 99)
-    camera.set_control_value(asi.ASI_GAMMA, 50)
-    camera.set_control_value(asi.ASI_BRIGHTNESS, 50)
-    camera.set_image_type(asi.ASI_IMG_RGB24)
+
+    # Read all camera controls defined in the config file
+    for c in controls:
+        cl = c.lower()
+        if config.has_option('camera', cl):
+            value = config.get('camera', cl)
+            default_value = controls[c]['DefaultValue']
+            control_type = getattr(asi, 'ASI_' + c.upper())
+            logger.debug('set control value %s to %s', cl, value)
+            if value == 'auto':
+                camera.set_control_value(control_type, default_value, auto=True)
+            else:
+                # Cast value to same type as default_value
+                camera.set_control_value(control_type, type(default_value)(value), auto=False)
+
+
+    if config.has_option('camera', 'image_type'):
+        image_type = config.get('camera', 'image_type')
+        logger.debug('set image type to %s', image_type)
+        camera.set_image_type(getattr(asi, 'ASI_IMG_' + image_type.upper()))
     time.sleep(2)
 
 
@@ -365,7 +374,7 @@ def run_camera():
     # it uses safe_eval to convert strings to numbers or
     # lists (not guaranteed safe!)
     camera = get_camera(config)
-    init_camera(camera)
+    init_camera(camera, config)
 
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
