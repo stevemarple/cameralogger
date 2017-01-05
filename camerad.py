@@ -11,6 +11,8 @@ import numpy as np
 import operator
 import os
 from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
 import requests
 from scipy.stats import trim_mean
 import signal
@@ -31,7 +33,7 @@ else:
     from ConfigParser import SafeConfigParser
 
 
-class Action(object):
+class Task(object):
     def __init__(self, config=None, schedule=None):
         self.config = config
         self.schedule = schedule
@@ -39,8 +41,8 @@ class Action(object):
         self.buffers = {}
         self.capture_info = {}
 
-    def run_actions(self, actions):
-        for section in actions:
+    def run_tasks(self, tasks):
+        for section in tasks:
             if not config.has_section(section):
                 raise ValueError('no section called %s' % section)
             act = self.config.get(section, 'action')
@@ -49,8 +51,8 @@ class Action(object):
             logger.debug('calling action %s(%s)' % (act, repr(section)))
             getattr(self, act)(section)
 
-    def get_option(self, section, option, default=None):
-        return get_config_option(self.config, section, option, default=default)
+    def get_option(self, section, option, default=None, get=None):
+        return get_config_option(self.config, section, option, default=default, get=get)
 
     def capture(self, section):
         dst = self.get_option(section, 'dst')
@@ -79,6 +81,18 @@ class Action(object):
 
     def list_buffers(self, section):
         logger.info('buffers: %s' % (', '.join(sorted(self.buffers.keys()))))
+
+    def add_text(self, section):
+        src = self.get_option(section, 'src')
+        # dst = self.get_option(section, 'dst', src)
+        font_name = self.get_option(section, 'font')
+        font_size = self.get_option(section, 'size', get='getint')
+        text = self.get_option(section, 'text')
+        color = hex_to_rgb(self.get_option(section, 'color'))
+        position = map(int, self.get_option(section, 'position').split())
+        font = ImageFont.truetype(font_name, font_size)
+        draw = ImageDraw.Draw(self.buffers[src])
+        draw.text(position, text, color, font=font)
 
 
 def read_config_file(filename):
@@ -191,7 +205,7 @@ def get_schedule(config):
     for sec in config.sections():
         if sec in ['DEFAULT', 'common', 'daemon']:
             continue
-        if not config.has_option(sec, 'actions'):
+        if not config.has_option(sec, 'tasks'):
             continue
 
         if config.has_option(sec, 'solar_elevation'):
@@ -342,7 +356,7 @@ def run_camera():
         get_log_file_for_time(time.time(), log_filename)
         logger.info('Starting sampling thread')
 
-        do_every(config, process_schedule)
+        do_every(config, process_tasks)
         while take_images:
             time.sleep(2)
 
@@ -494,7 +508,7 @@ capture_image.lock = threading.Lock()
 # possibly sends a real-time data packet over the network. A second
 # lock (write_to_csv_file.lock) is used to avoid contention on writing
 # results to a file.
-def process_schedule(schedule):
+def process_tasks(schedule):
     global data_quality_ok
     global ntp_ok
     img = None
@@ -502,13 +516,13 @@ def process_schedule(schedule):
     t = None
     get_log_file_for_time(time.time(), log_filename, delay=False)
     logger.debug('process_schedule(): acquiring lock')
-    if process_schedule.lock.acquire(False):
+    if process_tasks.lock.acquire(False):
         try:
             logger.debug('process_schedule(): acquired lock')
             img, img_info, now = capture_image()
         finally:
             logging.debug('process_schedule(): released lock')
-            process_schedule.lock.release()
+            process_tasks.lock.release()
     else:
         logger.error('process_schedule(): could not acquire lock')
 
@@ -580,17 +594,17 @@ def process_schedule(schedule):
         for k in sorted(img_info.keys()):
             fh.write('%s: %s\n' % (k, str(img_info[k])))
 
-    actions = get_config_option(config, schedule, 'actions', fallback_section='common', default='')
-    print('actions: ' + repr(actions))
+    tasks = get_config_option(config, schedule, 'tasks', fallback_section='common', default='')
+    print('tasks: ' + repr(tasks))
 
-    act = Action(config, schedule)
-    act.run_actions(actions.split())
+    act = Task(config, schedule)
+    act.run_tasks(tasks.split())
 
 
 
     return
 
-process_schedule.lock = threading.Lock()
+process_tasks.lock = threading.Lock()
 
 
 def data_to_str(data, separator=',', comments='#', want_header=False):
@@ -647,6 +661,18 @@ def get_log_file_for_time(t, fstr,
         logger.addHandler(fh)
 
 
+# http://stackoverflow.com/questions/4296249/how-do-i-convert-a-hex-triplet-to-an-rgb-tuple-and-back
+def hex_to_rgb(value):
+    value = value.lstrip('#')
+    lv = len(value)
+    return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+
+
+# http://stackoverflow.com/questions/4296249/how-do-i-convert-a-hex-triplet-to-an-rgb-tuple-and-back
+def rgb_to_hex(rgb):
+    return '#%02x%02x%02x' % rgb
+
+
 get_log_file_for_time.fh = None
 
 
@@ -691,7 +717,7 @@ if __name__ == '__main__':
                         format=args.log_format, datefmt='%Y-%m-%dT%H:%M:%SZ')
 
     if (args.schedule is not None and
-            (not config.has_section(args.schedule) or not config.has_option(args.schedule, 'actions'))):
+            (not config.has_section(args.schedule) or not config.has_option(args.schedule, 'tasks'))):
         raise Exception('%s is not a valid schedule', args.schedule)
 
     log_filename = None
