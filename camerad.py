@@ -52,8 +52,8 @@ class Task(object):
             logger.debug('calling action %s(%s)' % (act, repr(section)))
             getattr(self, act)(section)
 
-    def get_option(self, section, option, default=None, get=None):
-        return get_config_option(self.config, section, option, default=default, get=get)
+    def get_option(self, section, option, default=None, fallback_section=None, get=None):
+        return get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
 
     def capture(self, section):
         dst = self.get_option(section, 'dst')
@@ -109,13 +109,13 @@ class Task(object):
                      (buf, self.buffers[buf].mode, self.buffers[buf].size[0], self.buffers[buf].size[1]))
         logger.info('buffers: %s' % (', '.join(a)))
 
-    def add_text(self, section):
+    def text(self, section):
         src = self.get_option(section, 'src')
         # dst = self.get_option(section, 'dst', src)
-        font_name = self.get_option(section, 'font')
-        font_size = self.get_option(section, 'size', get='getint')
+        font_name = self.get_option(section, 'font', fallback_section='common')
+        font_size = self.get_option(section, 'fontsize', fallback_section='common', get='getint')
         text = self.get_option(section, 'text')
-        color = hex_to_rgb(self.get_option(section, 'color'))
+        color = hex_to_rgb(self.get_option(section, 'color', fallback_section='common'))
         position = map(int, self.get_option(section, 'position').split())
         font = ImageFont.truetype(font_name, font_size)
         draw = ImageDraw.Draw(self.buffers[src])
