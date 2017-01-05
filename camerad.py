@@ -13,6 +13,7 @@ import os
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
+from PIL import ImageOps
 import requests
 from scipy.stats import trim_mean
 import signal
@@ -61,7 +62,7 @@ class Task(object):
             self.time = t # Record time of first capture
         self.buffers[dst] = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
 
-    def save_image(self, section):
+    def save(self, section):
         src = self.get_option(section, 'src')
         tm = time.gmtime(self.time)
         filename = self.get_option(section, 'filename')
@@ -69,18 +70,44 @@ class Task(object):
         self.buffers[src].save(time.strftime(filename, tm))
         logger.info('saved %s', filename)
 
-    def convert_buffer(self, section):
+    def copy(self, section):
+        src = self.get_option(section, 'src')
+        dst = self.get_option(section, 'dst')
+        self.buffers[dst] = self.buffers[src].copy()
+
+    def convert(self, section):
         src = self.get_option(section, 'src')
         dst = self.get_option(section, 'dst', src)
         mode = self.get_option(section, 'mode')
         self.buffers[dst] = self.buffers[src].convert(mode)
 
-    def delete_buffer(self, section):
+    def crop(self, section):
+        src = self.get_option(section, 'src')
+        dst = self.get_option(section, 'dst', src)
+        position = map(int, self.get_option(section, 'position').split())
+        self.buffers[dst] = self.buffers[src].crop(position)
+        self.buffers[dst].load() # crop() is lazy operation; break connection
+
+    def flip(self, section):
+        src = self.get_option(section, 'src')
+        dst = self.get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.flip(self.buffers[src])
+
+    def mirror(self, section):
+        src = self.get_option(section, 'src')
+        dst = self.get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.mirror(self.buffers[src])
+
+    def delete(self, section):
         src = self.get_option(section, 'src')
         del self.buffers[src]
 
     def list_buffers(self, section):
-        logger.info('buffers: %s' % (', '.join(sorted(self.buffers.keys()))))
+        a = []
+        for buf in sorted(self.buffers.keys()):
+            a.append('%s(mode=%s size=%dx%d)' %
+                     (buf, self.buffers[buf].mode, self.buffers[buf].size[0], self.buffers[buf].size[1]))
+        logger.info('buffers: %s' % (', '.join(a)))
 
     def add_text(self, section):
         src = self.get_option(section, 'src')
@@ -100,9 +127,6 @@ def read_config_file(filename):
     logger.info('Reading config file ' + filename)
     config = SafeConfigParser()
 
-    #config.add_section('DEFAULT')
-    #config.set('daemon', 'sampling_interval', '30')
-
 
     config.add_section('daemon')
     config.set('daemon', 'user', 'pi')
@@ -115,12 +139,6 @@ def read_config_file(filename):
     config.add_section('upload')
     # User must add appropriate values
 
-    # Monitor for the existence of a file to indicate possible adverse
-    # data quality
-    config.add_section('dataqualitymonitor')
-    config.set('dataqualitymonitor', 'extension', '.bad')
-    config.set('dataqualitymonitor', 'username', 'pi')
-    config.set('dataqualitymonitor', 'group', 'dialout')
 
     if filename:
         config_files_read = config.read(filename)
@@ -328,7 +346,7 @@ def get_control_values(camera):
         r['Flip'] = {0: 'None', 1: 'Horizontal', 2: 'Vertical', 3: 'Both'}[r['Flip']]
 
     # Convert any remaining non-string types to string
-    for k, v in r.iteritems():
+    for k, v in six.iteritems(r):
         if isinstance(v, six.string_types):
             pass
         elif isinstance(v, float):
@@ -509,98 +527,11 @@ capture_image.lock = threading.Lock()
 # lock (write_to_csv_file.lock) is used to avoid contention on writing
 # results to a file.
 def process_tasks(schedule):
-    global data_quality_ok
-    global ntp_ok
-    img = None
-    img_info = None
-    t = None
-    get_log_file_for_time(time.time(), log_filename, delay=False)
-    logger.debug('process_schedule(): acquiring lock')
-    if process_tasks.lock.acquire(False):
-        try:
-            logger.debug('process_schedule(): acquired lock')
-            img, img_info, now = capture_image()
-        finally:
-            logging.debug('process_schedule(): released lock')
-            process_tasks.lock.release()
-    else:
-        logger.error('process_schedule(): could not acquire lock')
-
-    if img is None:
-        return
-
-    # A warning about data quality from any source
-    data_quality_warning = False
-    if config.has_option('dataqualitymonitor', 'directory'):
-        # Any file/directory counts as a warning
-        try:
-            data_quality_warning = \
-                bool(os.listdir(config.get('dataqualitymonitor',
-                                           'directory')))
-        except:
-            pass
-    elif config.has_option('dataqualitymonitor', 'filename'):
-        data_quality_warning = \
-            os.path.isfile(config.get('dataqualitymonitor', 'filename'))
-
-    if data_quality_warning:
-        # Problem with data quality
-        if data_quality_ok:
-            # Not known previously, log
-            get_log_file_for_time(time.time(), log_filename)
-            logger.warning('Data quality warning detected')
-            data_quality_ok = False
-    elif not data_quality_ok:
-            get_log_file_for_time(time.time(), log_filename)
-            logger.info('Data quality warning removed')
-            data_quality_ok = True
-    
-    if (config.has_option('ntp_status', 'filename') and 
-        config.has_option('ntp_status', 'max_age') and 
-        (not os.path.exists(config.get('ntp_status', 'filename')) or 
-         time.time() - os.stat(config.get('ntp_status', 'filename')).st_mtime
-         > config.get('ntp_status', 'max_age'))):
-        # NTP status file is missing/old, assume NTP not running
-        if ntp_ok:
-            get_log_file_for_time(time.time(), log_filename)
-            logger.warning('NTP not running/synchronized')
-            ntp_ok = False
-    elif not ntp_ok:
-        get_log_file_for_time(time.time(), log_filename)
-        logger.info('NTP problem resolved')
-        ntp_ok = True
-    ext = None
-    if not data_quality_ok or not ntp_ok:
-        ext = config.get('dataqualitymonitor', 'extension')
-
-    ###########################
-    # Save image
-    dir = '/home/pi/tmpfs'
-    filename = '%Y%m%dT%H%M%S_orig.png'
-    info_filename = '%Y%m%dT%H%M%S.txt'
-    if os.path.isdir(dir):
-        filename = os.path.join(dir, filename)
-        info_filename = os.path.join(dir, info_filename)
-
-    tm = time.gmtime(t)
-    filename = time.strftime(filename, tm)
-    info_filename = time.strftime(info_filename, tm)
-    # cv2.imwrite(filename, img)
-    pil_img = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
-    pil_img.save(time.strftime(filename, tm))
-    logger.info('saved %s', filename)
-
-    with open(info_filename, 'w') as fh:
-        for k in sorted(img_info.keys()):
-            fh.write('%s: %s\n' % (k, str(img_info[k])))
-
     tasks = get_config_option(config, schedule, 'tasks', fallback_section='common', default='')
     print('tasks: ' + repr(tasks))
 
     act = Task(config, schedule)
     act.run_tasks(tasks.split())
-
-
 
     return
 
@@ -727,7 +658,5 @@ if __name__ == '__main__':
     get_log_file_for_time(time.time(), log_filename)
     logger.info(progname + ' started')
 
-    data_quality_ok = True
-    ntp_ok = True
     run_camera()
 
