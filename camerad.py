@@ -10,6 +10,7 @@ import lxml.etree as ET
 import numpy as np
 import operator
 import os
+from PIL import Image
 import requests
 from scipy.stats import trim_mean
 import signal
@@ -29,12 +30,56 @@ else:
     import ConfigParser
     from ConfigParser import SafeConfigParser
 
-logger = logging.getLogger(__name__)
 
-camera = None
-default_sampling_interval = 120
-sampling_interval = default_sampling_interval
-sampling_interval_lock = threading.Lock()
+class Action(object):
+    def __init__(self, config=None, schedule=None):
+        self.config = config
+        self.schedule = schedule
+        self.time = None
+        self.buffers = {}
+        self.capture_info = {}
+
+    def run_actions(self, actions):
+        for section in actions:
+            if not config.has_section(section):
+                raise ValueError('no section called %s' % section)
+            act = self.config.get(section, 'action')
+            if not hasattr(self, act):
+                raise ValueError('unknown action (%s)' % act)
+            logger.debug('calling action %s(%s)' % (act, repr(section)))
+            getattr(self, act)(section)
+
+    def get_option(self, section, option, default=None):
+        return get_config_option(self.config, section, option, default=default)
+
+    def capture(self, section):
+        dst = self.get_option(section, 'dst')
+        img, self.capture_info[dst], t = capture_image()
+        if self.time is None:
+            self.time = t # Record time of first capture
+        self.buffers[dst] = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
+
+    def save_image(self, section):
+        src = self.get_option(section, 'src')
+        tm = time.gmtime(self.time)
+        filename = self.get_option(section, 'filename')
+        filename = time.strftime(filename, tm)
+        self.buffers[src].save(time.strftime(filename, tm))
+        logger.info('saved %s', filename)
+
+    def convert_buffer(self, section):
+        src = self.get_option(section, 'src')
+        dst = self.get_option(section, 'dst', src)
+        mode = self.get_option(section, 'mode')
+        self.buffers[dst] = self.buffers[src].convert(mode)
+
+    def delete_buffer(self, section):
+        src = self.get_option(section, 'src')
+        del self.buffers[src]
+
+    def list_buffers(self, section):
+        logger.info('buffers: %s' % (', '.join(sorted(self.buffers.keys()))))
+
 
 def read_config_file(filename):
     """Read config file."""
@@ -297,7 +342,7 @@ def run_camera():
         get_log_file_for_time(time.time(), log_filename)
         logger.info('Starting sampling thread')
 
-        do_every(config, record_image)
+        do_every(config, process_schedule)
         while take_images:
             time.sleep(2)
 
@@ -409,7 +454,7 @@ def do_every (config, worker_func, iterations = 0):
 
 
     try:
-        worker_func()
+        worker_func(schedule)
     except Exception as e:
         get_log_file_for_time(time.time(), log_filename)
         logger.error(traceback.format_exc())
@@ -424,46 +469,48 @@ def get_camera(config):
     return asi.Camera(0)
 
 
-def capture():
+def capture_image():
     global camera
-    t = time.time()
-    img_info = get_control_values(camera)
-    img = camera.capture_video_frame()
-    img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
+    with capture_image.lock:
+        t = time.time()
+        img_info = get_control_values(camera)
+        img = camera.capture_video_frame()
+        img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
 
-    # Take CPU temperature as system temperature
-    img_info['SystemTemperature'] = 'unknown'
-    with open('/sys/class/thermal/thermal_zone0/temp') as f:
-        img_info['SystemTemperature'] = '%.2f' % (float(f.read().strip())/1000)
+        # Take CPU temperature as system temperature
+        img_info['SystemTemperature'] = 'unknown'
+        with open('/sys/class/thermal/thermal_zone0/temp') as f:
+            img_info['SystemTemperature'] = '%.2f' % (float(f.read().strip())/1000)
 
-    return img, img_info, t
+        return img, img_info, t
 
+capture_image.lock = threading.Lock()
 
 # Each sampling action is made by a new thread. This function uses a
 # lock to avoid contention for the camera. If the lock cannot be
 # acquired the attempt is abandoned. The lock is released after the
-# sample has been taken. This means two instances of record_image()
+# sample has been taken. This means two instances of process_schedule()
 # can occur at the same time, whilst the earlier one writes data and
 # possibly sends a real-time data packet over the network. A second
 # lock (write_to_csv_file.lock) is used to avoid contention on writing
 # results to a file.
-def record_image():
+def process_schedule(schedule):
     global data_quality_ok
     global ntp_ok
     img = None
     img_info = None
     t = None
     get_log_file_for_time(time.time(), log_filename, delay=False)
-    logger.debug('record_image(): acquiring lock')
-    if record_image.lock.acquire(False):
+    logger.debug('process_schedule(): acquiring lock')
+    if process_schedule.lock.acquire(False):
         try:
-            logger.debug('record_image(): acquired lock')
-            img, img_info, now = capture()
+            logger.debug('process_schedule(): acquired lock')
+            img, img_info, now = capture_image()
         finally:
-            logging.debug('record_image(): released lock')
-            record_image.lock.release()
+            logging.debug('process_schedule(): released lock')
+            process_schedule.lock.release()
     else:
-        logger.error('record_image(): could not acquire lock')
+        logger.error('process_schedule(): could not acquire lock')
 
     if img is None:
         return
@@ -508,7 +555,6 @@ def record_image():
         get_log_file_for_time(time.time(), log_filename)
         logger.info('NTP problem resolved')
         ntp_ok = True
-
     ext = None
     if not data_quality_ok or not ntp_ok:
         ext = config.get('dataqualitymonitor', 'extension')
@@ -516,7 +562,7 @@ def record_image():
     ###########################
     # Save image
     dir = '/home/pi/tmpfs'
-    filename = '%Y%m%dT%H%M%S.png'
+    filename = '%Y%m%dT%H%M%S_orig.png'
     info_filename = '%Y%m%dT%H%M%S.txt'
     if os.path.isdir(dir):
         filename = os.path.join(dir, filename)
@@ -525,15 +571,26 @@ def record_image():
     tm = time.gmtime(t)
     filename = time.strftime(filename, tm)
     info_filename = time.strftime(info_filename, tm)
-    cv2.imwrite(filename, img)
+    # cv2.imwrite(filename, img)
+    pil_img = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
+    pil_img.save(time.strftime(filename, tm))
     logger.info('saved %s', filename)
+
     with open(info_filename, 'w') as fh:
         for k in sorted(img_info.keys()):
             fh.write('%s: %s\n' % (k, str(img_info[k])))
 
+    actions = get_config_option(config, schedule, 'actions', fallback_section='common', default='')
+    print('actions: ' + repr(actions))
+
+    act = Action(config, schedule)
+    act.run_actions(actions.split())
+
+
+
     return
 
-record_image.lock = threading.Lock()
+process_schedule.lock = threading.Lock()
 
 
 def data_to_str(data, separator=',', comments='#', want_header=False):
@@ -591,6 +648,13 @@ def get_log_file_for_time(t, fstr,
 
 
 get_log_file_for_time.fh = None
+
+
+logger = logging.getLogger(__name__)
+camera = None
+default_sampling_interval = 120
+sampling_interval = default_sampling_interval
+sampling_interval_lock = threading.Lock()
 
 
 if __name__ == '__main__':
