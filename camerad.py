@@ -93,7 +93,7 @@ class Task(object):
     # Tasks are below
     def add_text(self, section):
         src = self._get_option(section, 'src')
-        dst = self.get_option(section, 'dst', src)
+        dst = self._get_option(section, 'dst', src)
         font_name = self._get_option(section, 'font', fallback_section='common')
         font_size = self._get_option(section, 'fontsize', fallback_section='common', get='getint')
         text = self._get_option(section, 'text')
@@ -111,12 +111,40 @@ class Task(object):
         dst = self._get_option(section, 'dst', src1)
         self.buffers[dst] = Image.alpha_composite(self.buffers[src1], self.buffers[src2])
 
+    def autocontrast(self, section):
+        src = self._get_option(section, 'src')
+        cutoff = self._get_option(section, 'cutoff', 0, get='getfloat')
+        ignore = self._get_option(section, 'ignore', raise_=False)
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.autocontrast(self.buffers[src], cutoff, ignore)
+
+    def blend(self, section):
+        src1 = self._get_option(section, 'src1')
+        src2 = self._get_option(section, 'src2')
+        dst = self._get_option(section, 'dst', src1)
+        alpha = self._get_option(section, 'alpha', get='getfloat')
+        self.buffers[dst] = Image.blend(self.buffers[src1], self.buffers[src2], alpha)
+
     def capture(self, section):
         dst = self._get_option(section, 'dst')
         img, self.capture_info[dst], t = capture_image()
         if self.time is None:
             self.time = t # Record time of first capture
         self.buffers[dst] = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
+
+    def colorize(self, section):
+        src = self._get_option(section, 'src')
+        black = self._get_option(section, 'black')
+        white = self._get_option(section, 'white')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.colorize(self.buffers[src], black, white)
+
+    def composite(self, section):
+        src1 = self._get_option(section, 'src1')
+        src2 = self._get_option(section, 'src2')
+        mask = self._get_option(section, 'mask')
+        dst = self._get_option(section, 'dst', src1)
+        self.buffers[dst] = Image.composite(self.buffers[src1], self.buffers[src2], self.buffers[mask])
 
     def convert(self, section):
         src = self._get_option(section, 'src')
@@ -140,6 +168,13 @@ class Task(object):
         src = self._get_option(section, 'src')
         del self.buffers[src]
 
+    def equalize(self, section):
+        src = self._get_option(section, 'src')
+        mask = self._get_option(section, 'mask', raise_=False)
+        white = self._get_option(section, 'white')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.equalize(self.buffers[src], mask)
+
     def expand(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
@@ -162,10 +197,31 @@ class Task(object):
         fill = self._get_option(section, 'fill', 0)
         self.buffers[dst] = ImageOps.expand(self.buffers[src], border, fill)
 
+    def fit(self, section):
+        src = self._get_option(section, 'src')
+        size = self._get_size(section)
+        method = self._get_option(section, 'method', Image.NEAREST)
+        if method is not 0:
+            method = getattr(Image, method.upper())
+        bleed = self._get_option(section, 'bleed', 0, get='getfloat')
+        centering = tuple(map(float, self._get_option(section, 'centering', '0.5 0.5').split()))
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.fit(self.buffers[src], size, method, bleed, centering)
+
     def flip(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = ImageOps.flip(self.buffers[src])
+
+    def grayscale(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.grayscale(self.buffers[src])
+
+    def invert(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.invert(self.buffers[src])
 
     def list_buffers(self, section):
         a = []
@@ -184,6 +240,16 @@ class Task(object):
         dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = ImageOps.mirror(self.buffers[src])
 
+    def merge(self, section):
+        mode = self._get_mode(section)
+        src1 = self._get_option(section, 'src1')
+        bands = [self.buffers[src1]]
+        for n in range(1, len(Image.new('mode',(1,1)).getbands())):
+            src = self._get_option(section, 'src%d' % n)
+            bands.append(self.buffers[src])
+        dst = self._get_option(section, 'dst', src1)
+        self.buffers[dst] = Image.merge(mode, bands)
+
     def new(self, section):
         dst = self._get_option(section, 'dst')
         mode = self._get_option(section, 'mode')
@@ -191,14 +257,43 @@ class Task(object):
         color = self._get_color(section, default=0)
         self.buffers[dst] = Image.new(mode, size, color)
 
+    def paste(self, section):
+        src1 = self._get_option(section, 'src1')
+        src2 = self._get_option(section, 'src2')
+        position = map(int, self._get_option(section, 'position', '0 0').split())
+        mask = self._get_option(section, 'mask', raise_=False)
+        # In keeping with most other functions allow paste() to be nondestructive.
+        dst = self._get_option(section, 'dst', src1)
+        if dst == src1:
+            self.buffers[src1].paste(src2, position, mask)
+        else:
+            self.buffers[dst] = self.buffers[src1].copy()
+            self.buffers[dst].paste(src2, position, mask)
+
+    def posterize(self, section):
+        src = self._get_option(section, 'src')
+        bits = self._get_option(section, 'bits', get='getint')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.posterize(self.buffers[src], bits)
+
     def resize(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
         size = self._get_size(section)
-        resample = self._get_option(section, 'resample', 0)
+        resample = self._get_option(section, 'resample', Image.NEAREST)
         if resample is not 0:
             resample = getattr(Image, resample.upper())
         self.buffers[dst] = self.buffers[src].resize(size, resample)
+
+    def rotate(self, section):
+        src = self._get_option(section, 'src')
+        angle = self._get_option(section, 'angle', get='getfloat')
+        resample = self._get_option(section, 'resample', Image.NEAREST)
+        if resample is not 0:
+            resample = getattr(Image, resample.upper())
+        expand = self._get_option(section, 'expand', get='getbool', raise_=False)
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = self.buffers[src].rotate(angle, resample, expand)
 
     def save(self, section):
         src = self._get_option(section, 'src')
@@ -207,6 +302,26 @@ class Task(object):
         filename = time.strftime(filename, tm)
         self.buffers[src].save(time.strftime(filename, tm))
         logger.info('saved %s', filename)
+
+    def split(self, section):
+        src = self._get_option(section, 'src')
+        images = self.buffers[src]
+        for n in range(len(images)):
+            dst = self._get_option(section, 'dst%d' % n)
+            self.buffers[dst] = images[n]
+
+    def solarize(self, section):
+        src = self._get_option(section, 'src')
+        threshold = self._get_option(section, 'bits', 128, get='getint')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.solarize(self.buffers[src], threshold)
+
+    def transpose(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        method = getattr(Image, self._get_option(section, 'method'))
+        self.buffers[dst] = self.buffers[src].tranpose(method)
+
 
 
 def read_config_file(filename):
