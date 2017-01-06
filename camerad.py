@@ -46,9 +46,9 @@ class Task(object):
         r = get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
         if raise_ and r is None:
             if fallback_section is None:
-                raise Exception('could not find value for \'%s\' in section \'%s\'', (option, section))
+                raise Exception('could not find value for "%s" in section "%s"' % (option, section))
             else:
-                raise Exception('could not find value for %s in sections %s or %s', (option, section, fallback_section))
+                raise Exception('could not find value for "%s" in sections "%s" or "%s"' % (option, section, fallback_section))
         return r
 
     def run_tasks(self, tasks):
@@ -119,6 +119,13 @@ class Task(object):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = ImageOps.mirror(self.buffers[src])
+
+    def new(self, section):
+        dst = self._get_option(section, 'dst')
+        mode = self._get_option(section, 'mode')
+        size = map(int, self._get_option(section, 'size').split())
+        color = self._get_option(section, 'color', default=0)
+        self.buffers[dst] = Image.new(mode, size, color)
 
     def save(self, section):
         src = self._get_option(section, 'src')
@@ -230,7 +237,7 @@ def get_schedule(config):
     for sec in config.sections():
         if sec in ['DEFAULT', 'common', 'daemon']:
             continue
-        if not config.has_option(sec, 'tasks'):
+        if get_config_option(config, sec, 'tasks', fallback_section='common') is None:
             continue
 
         if config.has_option(sec, 'solar_elevation'):
