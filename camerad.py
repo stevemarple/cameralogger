@@ -42,6 +42,9 @@ class Task(object):
         self.buffers = {}
         self.capture_info = {}
 
+    def _get_option(self, section, option, default=None, fallback_section=None, get=None):
+        return get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
+
     def run_tasks(self, tasks):
         for section in tasks:
             if not config.has_section(section):
@@ -52,54 +55,51 @@ class Task(object):
             logger.debug('calling action %s(%s)' % (act, repr(section)))
             getattr(self, act)(section)
 
-    def get_option(self, section, option, default=None, fallback_section=None, get=None):
-        return get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
+    # Tasks are below
+    def add_text(self, section):
+        src = self._get_option(section, 'src')
+        # dst = self.get_option(section, 'dst', src)
+        font_name = self._get_option(section, 'font', fallback_section='common')
+        font_size = self._get_option(section, 'fontsize', fallback_section='common', get='getint')
+        text = self._get_option(section, 'text')
+        color = hex_to_rgb(self._get_option(section, 'color', fallback_section='common'))
+        position = map(int, self._get_option(section, 'position').split())
+        font = ImageFont.truetype(font_name, font_size)
+        draw = ImageDraw.Draw(self.buffers[src])
+        draw.text(position, text, color, font=font)
 
     def capture(self, section):
-        dst = self.get_option(section, 'dst')
+        dst = self._get_option(section, 'dst')
         img, self.capture_info[dst], t = capture_image()
         if self.time is None:
             self.time = t # Record time of first capture
         self.buffers[dst] = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
 
-    def save(self, section):
-        src = self.get_option(section, 'src')
-        tm = time.gmtime(self.time)
-        filename = self.get_option(section, 'filename')
-        filename = time.strftime(filename, tm)
-        self.buffers[src].save(time.strftime(filename, tm))
-        logger.info('saved %s', filename)
-
-    def copy(self, section):
-        src = self.get_option(section, 'src')
-        dst = self.get_option(section, 'dst')
-        self.buffers[dst] = self.buffers[src].copy()
-
     def convert(self, section):
-        src = self.get_option(section, 'src')
-        dst = self.get_option(section, 'dst', src)
-        mode = self.get_option(section, 'mode')
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        mode = self._get_option(section, 'mode')
         self.buffers[dst] = self.buffers[src].convert(mode)
 
+    def copy(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst')
+        self.buffers[dst] = self.buffers[src].copy()
+
     def crop(self, section):
-        src = self.get_option(section, 'src')
-        dst = self.get_option(section, 'dst', src)
-        position = map(int, self.get_option(section, 'position').split())
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        position = map(int, self._get_option(section, 'position').split())
         self.buffers[dst] = self.buffers[src].crop(position)
         self.buffers[dst].load() # crop() is lazy operation; break connection
 
     def flip(self, section):
-        src = self.get_option(section, 'src')
-        dst = self.get_option(section, 'dst', src)
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = ImageOps.flip(self.buffers[src])
 
-    def mirror(self, section):
-        src = self.get_option(section, 'src')
-        dst = self.get_option(section, 'dst', src)
-        self.buffers[dst] = ImageOps.mirror(self.buffers[src])
-
     def delete(self, section):
-        src = self.get_option(section, 'src')
+        src = self._get_option(section, 'src')
         del self.buffers[src]
 
     def list_buffers(self, section):
@@ -109,17 +109,18 @@ class Task(object):
                      (buf, self.buffers[buf].mode, self.buffers[buf].size[0], self.buffers[buf].size[1]))
         logger.info('buffers: %s' % (', '.join(a)))
 
-    def add_text(self, section):
-        src = self.get_option(section, 'src')
-        # dst = self.get_option(section, 'dst', src)
-        font_name = self.get_option(section, 'font', fallback_section='common')
-        font_size = self.get_option(section, 'fontsize', fallback_section='common', get='getint')
-        text = self.get_option(section, 'text')
-        color = hex_to_rgb(self.get_option(section, 'color', fallback_section='common'))
-        position = map(int, self.get_option(section, 'position').split())
-        font = ImageFont.truetype(font_name, font_size)
-        draw = ImageDraw.Draw(self.buffers[src])
-        draw.text(position, text, color, font=font)
+    def mirror(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        self.buffers[dst] = ImageOps.mirror(self.buffers[src])
+
+    def save(self, section):
+        src = self._get_option(section, 'src')
+        tm = time.gmtime(self.time)
+        filename = self._get_option(section, 'filename')
+        filename = time.strftime(filename, tm)
+        self.buffers[src].save(time.strftime(filename, tm))
+        logger.info('saved %s', filename)
 
 
 def read_config_file(filename):
