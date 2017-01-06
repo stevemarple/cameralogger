@@ -14,6 +14,7 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 from PIL import ImageOps
+import re
 import requests
 from scipy.stats import trim_mean
 import signal
@@ -42,6 +43,24 @@ class Task(object):
         self.buffers = {}
         self.capture_info = {}
 
+    def _get_color(self, section, default=None, fallback_section=None, get=None, raise_=True, option='color'):
+        color = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get, raise_=raise_)
+        if re.match('^[0-9a-f]{3,6}$', color, re.IGNORECASE):
+            return '#' + color
+        else:
+            return color
+
+    def _get_mode(self, section, default=None, fallback_section=None, get=None, raise_=True, option='mode'):
+        mode = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get,
+                                 raise_=raise_)
+        if len(mode) and mode[0] == '@':
+            mode = mode.lstrip('@')
+            if mode not in self.buffers:
+                raise ValueError('no buffer named "%s"' % mode)
+            return self.buffers[mode].mode
+        else:
+            return mode
+
     def _get_option(self, section, option, default=None, fallback_section=None, get=None, raise_=True):
         r = get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
         if raise_ and r is None:
@@ -50,6 +69,16 @@ class Task(object):
             else:
                 raise Exception('could not find value for "%s" in sections "%s" or "%s"' % (option, section, fallback_section))
         return r
+
+    def _get_size(self, section, default=None, fallback_section=None, get=None, raise_=True, option='size'):
+        size = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get, raise_=raise_)
+        if len(size) and size[0] == '@':
+            size = size.lstrip('@')
+            if size not in self.buffers:
+                raise ValueError('no buffer named "%s"' % size)
+            return self.buffers[size].size
+        else:
+            return map(int, size.split())
 
     def run_tasks(self, tasks):
         for section in tasks:
@@ -68,11 +97,17 @@ class Task(object):
         font_name = self._get_option(section, 'font', fallback_section='common')
         font_size = self._get_option(section, 'fontsize', fallback_section='common', get='getint')
         text = self._get_option(section, 'text')
-        color = hex_to_rgb(self._get_option(section, 'color', fallback_section='common'))
+        color = self._get_color(section, fallback_section='common')
         position = map(int, self._get_option(section, 'position').split())
         font = ImageFont.truetype(font_name, font_size)
         draw = ImageDraw.Draw(self.buffers[src])
         draw.text(position, text, color, font=font)
+
+    def alpha_composite(self, section):
+        src1 = self._get_option(section, 'src1')
+        src2 = self._get_option(section, 'src2')
+        dst = self._get_option(section, 'dst', src1)
+        self.buffers[dst] = Image.alpha_composite(self.buffers[src1], self.buffers[src2])
 
     def capture(self, section):
         dst = self._get_option(section, 'dst')
@@ -84,7 +119,7 @@ class Task(object):
     def convert(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
-        mode = self._get_option(section, 'mode')
+        mode = self._get_mode(section)
         self.buffers[dst] = self.buffers[src].convert(mode)
 
     def copy(self, section):
@@ -99,14 +134,36 @@ class Task(object):
         self.buffers[dst] = self.buffers[src].crop(position)
         self.buffers[dst].load() # crop() is lazy operation; break connection
 
+    def delete(self, section):
+        src = self._get_option(section, 'src')
+        del self.buffers[src]
+
+    def expand(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        # border is left, top, right, bottom
+        border = self._get_option(section, 'border', raise_=False)
+        if border is not None:
+            border = tuple(map(int, self._get_option(section, 'border').split()))
+        else:
+            # size: width, height
+            # position: left, top
+            size = self._get_size(section)
+            if len(size) == 1:
+                size.append(size[0])
+            position = map(int, self._get_option(section, 'position', 0).split())
+            if len(position) == 1:
+                position.append(position[0])
+            src_size = self.buffers[src].size
+            border = (position[0], position[1], size[0]-src_size[0]-position[0], size[1]-src_size[1]-position[1])
+
+        fill = self._get_option(section, 'fill', 0)
+        self.buffers[dst] = ImageOps.expand(self.buffers[src], border, fill)
+
     def flip(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = ImageOps.flip(self.buffers[src])
-
-    def delete(self, section):
-        src = self._get_option(section, 'src')
-        del self.buffers[src]
 
     def list_buffers(self, section):
         a = []
@@ -114,6 +171,11 @@ class Task(object):
             a.append('%s(mode=%s size=%dx%d)' %
                      (buf, self.buffers[buf].mode, self.buffers[buf].size[0], self.buffers[buf].size[1]))
         logger.info('buffers: %s' % (', '.join(a)))
+
+    def load(self, section):
+        dst = self._get_option(section, 'dst')
+        filename = self._get_option(section, 'filename')
+        self.buffers[dst] = Image.open(filename)
 
     def mirror(self, section):
         src = self._get_option(section, 'src')
@@ -123,9 +185,18 @@ class Task(object):
     def new(self, section):
         dst = self._get_option(section, 'dst')
         mode = self._get_option(section, 'mode')
-        size = map(int, self._get_option(section, 'size').split())
-        color = self._get_option(section, 'color', default=0)
+        size = self._get_size(section)
+        color = self._get_color(section, default=0)
         self.buffers[dst] = Image.new(mode, size, color)
+
+    def resize(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        size = self._get_size(section)
+        resample = self._get_option(section, 'resample', 0)
+        if resample is not 0:
+            resample = getattr(Image, resample.upper())
+        self.buffers[dst] = self.buffers[src].resize(size, resample)
 
     def save(self, section):
         src = self._get_option(section, 'src')
