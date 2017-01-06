@@ -42,8 +42,14 @@ class Task(object):
         self.buffers = {}
         self.capture_info = {}
 
-    def _get_option(self, section, option, default=None, fallback_section=None, get=None):
-        return get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
+    def _get_option(self, section, option, default=None, fallback_section=None, get=None, raise_=True):
+        r = get_config_option(self.config, section, option, default=default, fallback_section=fallback_section, get=get)
+        if raise_ and r is None:
+            if fallback_section is None:
+                raise Exception('could not find value for \'%s\' in section \'%s\'', (option, section))
+            else:
+                raise Exception('could not find value for %s in sections %s or %s', (option, section, fallback_section))
+        return r
 
     def run_tasks(self, tasks):
         for section in tasks:
