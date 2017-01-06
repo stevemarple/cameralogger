@@ -109,7 +109,7 @@ class Task(object):
                      (buf, self.buffers[buf].mode, self.buffers[buf].size[0], self.buffers[buf].size[1]))
         logger.info('buffers: %s' % (', '.join(a)))
 
-    def text(self, section):
+    def add_text(self, section):
         src = self.get_option(section, 'src')
         # dst = self.get_option(section, 'dst', src)
         font_name = self.get_option(section, 'font', fallback_section='common')
