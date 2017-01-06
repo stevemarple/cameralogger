@@ -93,14 +93,16 @@ class Task(object):
     # Tasks are below
     def add_text(self, section):
         src = self._get_option(section, 'src')
-        # dst = self.get_option(section, 'dst', src)
+        dst = self.get_option(section, 'dst', src)
         font_name = self._get_option(section, 'font', fallback_section='common')
         font_size = self._get_option(section, 'fontsize', fallback_section='common', get='getint')
         text = self._get_option(section, 'text')
         color = self._get_color(section, fallback_section='common')
         position = map(int, self._get_option(section, 'position').split())
         font = ImageFont.truetype(font_name, font_size)
-        draw = ImageDraw.Draw(self.buffers[src])
+        if dst != src:
+            self.buffers[dst] = self.buffers[src].copy()
+        draw = ImageDraw.Draw(self.buffers[dst])
         draw.text(position, text, color, font=font)
 
     def alpha_composite(self, section):
