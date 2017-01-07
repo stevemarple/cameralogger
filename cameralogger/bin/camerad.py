@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+__author__ = 'Steve Marple'
+__version__ = '0.0.0'
+__license__ = 'PSF'
+
 import argparse
 import astral
 import cv2
