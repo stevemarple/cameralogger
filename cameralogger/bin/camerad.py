@@ -1,14 +1,8 @@
 #!/usr/bin/env python
 
-__author__ = 'Steve Marple'
-__version__ = '0.0.1'
-__license__ = 'PSF'
-
 import argparse
 import astral
-import cv2
 import datetime
-import glob
 import logging
 import lxml.etree as ET
 import numpy as np
@@ -20,16 +14,17 @@ from PIL import ImageFont
 from PIL import ImageOps
 import re
 import requests
-from scipy.stats import trim_mean
 import signal
 import six
-import struct
 import sys
 import threading
 import time
 import traceback
 import zwoasi as asi
 
+__author__ = 'Steve Marple'
+__version__ = '0.0.1'
+__license__ = 'PSF'
 
 if sys.version_info[0] >= 3:
     import configparser
@@ -48,7 +43,8 @@ class Task(object):
         self.capture_info = {}
 
     def _get_color(self, section, default=None, fallback_section=None, get=None, raise_=True, option='color'):
-        color = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get, raise_=raise_)
+        color = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get,
+                                 raise_=raise_)
         if re.match('^[0-9a-f]{3,6}$', color, re.IGNORECASE):
             return '#' + color
         else:
@@ -56,7 +52,7 @@ class Task(object):
 
     def _get_mode(self, section, default=None, fallback_section=None, get=None, raise_=True, option='mode'):
         mode = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get,
-                                 raise_=raise_)
+                                raise_=raise_)
         if len(mode) and mode[0] == '@':
             mode = mode.lstrip('@')
             if mode not in self.buffers:
@@ -71,11 +67,13 @@ class Task(object):
             if fallback_section is None:
                 raise Exception('could not find value for "%s" in section "%s"' % (option, section))
             else:
-                raise Exception('could not find value for "%s" in sections "%s" or "%s"' % (option, section, fallback_section))
+                raise Exception(
+                    'could not find value for "%s" in sections "%s" or "%s"' % (option, section, fallback_section))
         return r
 
     def _get_size(self, section, default=None, fallback_section=None, get=None, raise_=True, option='size'):
-        size = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get, raise_=raise_)
+        size = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get,
+                                raise_=raise_)
         if len(size) and size[0] == '@':
             size = size.lstrip('@')
             if size not in self.buffers:
@@ -133,8 +131,8 @@ class Task(object):
         dst = self._get_option(section, 'dst')
         img, self.capture_info[dst], t = capture_image()
         if self.time is None:
-            self.time = t # Record time of first capture
-        self.buffers[dst] = Image.fromarray(img[:, :, ::-1]) # Swap from BGR order
+            self.time = t  # Record time of first capture
+        self.buffers[dst] = Image.fromarray(img[:, :, ::-1])  # Swap from BGR order
 
     def colorize(self, section):
         src = self._get_option(section, 'src')
@@ -166,7 +164,7 @@ class Task(object):
         dst = self._get_option(section, 'dst', src)
         position = map(int, self._get_option(section, 'position').split())
         self.buffers[dst] = self.buffers[src].crop(position)
-        self.buffers[dst].load() # crop() is lazy operation; break connection
+        self.buffers[dst].load()  # crop() is lazy operation; break connection
 
     def delete(self, section):
         src = self._get_option(section, 'src')
@@ -196,7 +194,8 @@ class Task(object):
             if len(position) == 1:
                 position.append(position[0])
             src_size = self.buffers[src].size
-            border = (position[0], position[1], size[0]-src_size[0]-position[0], size[1]-src_size[1]-position[1])
+            border = (
+            position[0], position[1], size[0] - src_size[0] - position[0], size[1] - src_size[1] - position[1])
 
         fill = self._get_option(section, 'fill', 0)
         self.buffers[dst] = ImageOps.expand(self.buffers[src], border, fill)
@@ -248,7 +247,7 @@ class Task(object):
         mode = self._get_mode(section)
         src1 = self._get_option(section, 'src1')
         bands = [self.buffers[src1]]
-        for n in range(1, len(Image.new('mode',(1,1)).getbands())):
+        for n in range(1, len(Image.new('mode', (1, 1)).getbands())):
             src = self._get_option(section, 'src%d' % n)
             bands.append(self.buffers[src])
         dst = self._get_option(section, 'dst', src1)
@@ -327,12 +326,10 @@ class Task(object):
         self.buffers[dst] = self.buffers[src].tranpose(method)
 
 
-
 def read_config_file(filename):
     """Read config file."""
     logger.info('Reading config file ' + filename)
     config = SafeConfigParser()
-
 
     config.add_section('daemon')
     config.set('daemon', 'user', 'pi')
@@ -390,8 +387,8 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
            '!=': operator.ne,
            'is': operator.is_,
            'is not': operator.is_not,
-           #'in': lambda(a, b): operator.contains(b,a), # Fix reversed operands
-           #'not in': lambda(a, b): not operator.contains(b,a), # Fix reversed operands
+           # 'in': lambda(a, b): operator.contains(b,a), # Fix reversed operands
+           # 'not in': lambda(a, b): not operator.contains(b,a), # Fix reversed operands
            'in': in_operator,
            'not in': not_in_operator,
            }
@@ -404,11 +401,11 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
         cast = bool
     elif isinstance(value, (int, np.int64)):
         cast = int
-    elif isinstance(value,(float, np.float64)):
+    elif isinstance(value, (float, np.float64)):
         cast = float
     else:
         # Keep as str
-        cast = lambda(x): x
+        cast = lambda (x): x
 
     option_str = get_config_option(config, section, option,
                                    fallback_section=fallback_section)
@@ -417,7 +414,7 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
         for s in option_str.split():
             conf_value.append(cast(s))
     else:
-            conf_value = cast(option_str)
+        conf_value = cast(option_str)
     return ops[op_name](value, conf_value)
 
 
@@ -538,7 +535,6 @@ def init_camera(camera, config):
                 # Cast value to same type as default_value
                 camera.set_control_value(control_type, type(default_value)(value), auto=False)
 
-
     if config.has_option('camera', 'image_type'):
         image_type = config.get('camera', 'image_type')
         logger.debug('set image type to %s', image_type)
@@ -556,7 +552,7 @@ def get_control_values(camera):
     if 'Exposure' in r:
         r['Exposure'] = '%.6f' % (r['Exposure'] / 1000000.0)
     if 'Temperature' in r:
-        r['Temperature'] = '%.1f' % (r['Temperature']/10.0)
+        r['Temperature'] = '%.1f' % (r['Temperature'] / 10.0)
     if 'Flip' in r:
         r['Flip'] = {0: 'None', 1: 'Horizontal', 2: 'Vertical', 3: 'Both'}[r['Flip']]
 
@@ -612,9 +608,8 @@ def run_camera():
         logger.error(traceback.format_exc())
         time.sleep(5)
 
-       
-def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
 
+def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
     class TimeoutError(Exception):
         pass
 
@@ -622,7 +617,7 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
         raise TimeoutError()
 
     # set the timeout handler
-    signal.signal(signal.SIGALRM, handler) 
+    signal.signal(signal.SIGALRM, handler)
     signal.alarm(timeout_duration)
     try:
         result = func(*args, **kwargs)
@@ -637,17 +632,19 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
 def cancel_sampling_threads():
     threads = threading.enumerate()
     for t in threads[1:]:
-        t.cancel()        
-    
-    # If all the other threads have completed then exit; exit anyway
+        t.cancel()
+
+        # If all the other threads have completed then exit; exit anyway
     # after a short time has passed
     t = time.time()
     while time.time() < t + 1 and len(threading.enumerate()) > 2:
         time.sleep(0.1)
-    #sys.exit()
+        # sys.exit()
 
 
 take_images = True
+
+
 def stop_handler(signal, frame):
     global take_images
     global camera
@@ -659,7 +656,7 @@ def stop_handler(signal, frame):
     camera.close()
 
 
-def do_every (config, worker_func, iterations = 0):
+def do_every(config, worker_func, iterations=0):
     global sampling_interval
     if iterations != 1:
         # Identify current operating condition to find the actions to do and sampling interval
@@ -680,9 +677,9 @@ def do_every (config, worker_func, iterations = 0):
         if delay < 0.1:
             delay = 0.1
         t = threading.Timer(delay,
-                            do_every, 
+                            do_every,
                             [config, worker_func,
-                             0 if iterations == 0 else iterations-1])
+                             0 if iterations == 0 else iterations - 1])
         t.daemon = True
         t.start()
 
@@ -699,7 +696,6 @@ def do_every (config, worker_func, iterations = 0):
         else:
             logger.error('sampling_interval_lock: could not acquire lock')
 
-
     try:
         worker_func(schedule)
     except Exception as e:
@@ -712,7 +708,7 @@ def round_to(n, nearest):
 
 
 def get_camera(config):
-    '''Return camera object based on config settings'''
+    """Return camera object based on config settings"""
     return asi.Camera(0)
 
 
@@ -727,11 +723,13 @@ def capture_image():
         # Take CPU temperature as system temperature
         img_info['SystemTemperature'] = 'unknown'
         with open('/sys/class/thermal/thermal_zone0/temp') as f:
-            img_info['SystemTemperature'] = '%.2f' % (float(f.read().strip())/1000)
+            img_info['SystemTemperature'] = '%.2f' % (float(f.read().strip()) / 1000)
 
         return img, img_info, t
 
+
 capture_image.lock = threading.Lock()
+
 
 # Each sampling action is made by a new thread. This function uses a
 # lock to avoid contention for the camera. If the lock cannot be
@@ -750,31 +748,13 @@ def process_tasks(schedule):
 
     return
 
+
 process_tasks.lock = threading.Lock()
 
 
-def data_to_str(data, separator=',', comments='#', want_header=False):
-    separator = ','
-    header = comments + 'sample_time'
-    fstr = '{sample_time:.3f}'
-    d = dict(sample_time=data['sample_time'], separator=separator)
-    for c in ('x', 'y', 'z', 'sensor_temperature'):
-        if c in data:
-            d[c] = data[c]
-            header += separator + c
-            fstr += '{separator}{' + c + ':.3f}'
-    header += '\n'
-    fstr += '\n'
-    s = fstr.format(**d)
-    if want_header:
-        return s, header
-    else:
-        return s
-
-
-def get_log_file_for_time(t, fstr, 
-                          mode='a', 
-                          delay=True, 
+def get_log_file_for_time(t, fstr,
+                          mode='a',
+                          delay=True,
                           name=__name__):
     if fstr is None:
         return
@@ -788,7 +768,7 @@ def get_log_file_for_time(t, fstr,
             # Filename has changed
             fh.close()
             fh = None
-        
+
     if fh is None:
         # File wasn't open or filename changed
         p = os.path.dirname(tmp_name)
@@ -807,27 +787,13 @@ def get_log_file_for_time(t, fstr,
         logger.addHandler(fh)
 
 
-# http://stackoverflow.com/questions/4296249/how-do-i-convert-a-hex-triplet-to-an-rgb-tuple-and-back
-def hex_to_rgb(value):
-    value = value.lstrip('#')
-    lv = len(value)
-    return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
-
-
-# http://stackoverflow.com/questions/4296249/how-do-i-convert-a-hex-triplet-to-an-rgb-tuple-and-back
-def rgb_to_hex(rgb):
-    return '#%02x%02x%02x' % rgb
-
-
 get_log_file_for_time.fh = None
-
 
 logger = logging.getLogger(__name__)
 camera = None
 default_sampling_interval = 120
 sampling_interval = default_sampling_interval
 sampling_interval_lock = threading.Lock()
-
 
 if __name__ == '__main__':
 
@@ -840,11 +806,11 @@ if __name__ == '__main__':
     parser = \
         argparse.ArgumentParser(description='AuroraWatch camera daemon')
 
-    parser.add_argument('-c', '--config-file', 
+    parser.add_argument('-c', '--config-file',
                         default=default_config_file,
                         help='Configuration file')
-    parser.add_argument('--log-level', 
-                        choices=['debug', 'info', 'warning', 
+    parser.add_argument('--log-level',
+                        choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
                         default='info',
                         help='Control how much detail is printed',
@@ -869,9 +835,8 @@ if __name__ == '__main__':
     log_filename = None
     if config.has_option('logfile', 'filename'):
         log_filename = config.get('logfile', 'filename')
-        
+
     get_log_file_for_time(time.time(), log_filename)
     logger.info(progname + ' started')
 
     run_camera()
-
