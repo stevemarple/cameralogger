@@ -187,8 +187,8 @@ class Tasks(object):
     def command(self, section):
         """Run shell command."""
         cmd = self._get_option(section, 'cmd')
-        check_call = self._get_option(section, 'check_call', True, get='getbool')
-        background = self._get_option(section, 'background', False, get='getbool')
+        check_call = self._get_option(section, 'check_call', True, get='getboolean')
+        background = self._get_option(section, 'background', False, get='getboolean')
         cmd = self._format_str(section, cmd)
         if check_call:
             logger.debug('running command "%s"', cmd)
@@ -352,7 +352,7 @@ class Tasks(object):
         resample = self._get_option(section, 'resample', Image.NEAREST)
         if resample is not 0:
             resample = getattr(Image, resample.upper())
-        expand = self._get_option(section, 'expand', get='getbool', raise_=False)
+        expand = self._get_option(section, 'expand', get='getboolean', raise_=False)
         dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = self.buffers[src].rotate(angle, resample, expand)
 
