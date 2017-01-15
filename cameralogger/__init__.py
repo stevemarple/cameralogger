@@ -18,9 +18,11 @@ import sys
 import threading
 import time
 import traceback
+import unicodedata
 
 
 from cameralogger.formatters import MyFormatter
+from cameralogger.formatters import LatLon
 
 if sys.version_info[0] >= 3:
     import configparser
@@ -94,8 +96,11 @@ class Tasks(object):
             r['DateTime'] = datetime.datetime.utcfromtimestamp(int(self.time))
         r['schedule'] = self.schedule
         r['section'] = section
-        r['latitude'] = self.config.getfloat('common', 'latitude')
-        r['longitude'] = self.config.getfloat('common', 'longitude')
+        lat = self.config.getfloat('common', 'latitude')
+        lon = self.config.getfloat('common', 'longitude')
+        r['latitude'] = lat
+        r['longitude'] = lon
+        r['LatLon'] = LatLon(lat, lon)
         return r
 
     def format_str(self, section, s):
@@ -115,12 +120,16 @@ class Tasks(object):
     def add_text(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
-        text = self.format_str(section, self._get_option(section, 'text'))
+        text = self._get_option(section, 'text')
         font_name = self._get_option(section, 'font', fallback_section='common')
         font_size = self._get_option(section, 'fontsize', fallback_section='common', get='getint')
         color = self._get_color(section, fallback_section='common')
+        unicode = self._get_option(section, 'unicode', False, fallback_section='common', get='getboolean')
         position = map(int, self._get_option(section, 'position').split())
         font = ImageFont.truetype(font_name, font_size)
+        if unicode:
+            text = text.decode('unicode-escape')
+        text = self.format_str(section, text)
         if dst != src:
             self.buffers[dst] = self.buffers[src].copy()
         draw = ImageDraw.Draw(self.buffers[dst])
@@ -129,14 +138,18 @@ class Tasks(object):
     def add_multiline_text(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
-        text = self.format_str(section, self._get_option(section, 'text'))
+        text = self._get_option(section, 'text')
         font_name = self._get_option(section, 'font', fallback_section='common')
         font_size = self._get_option(section, 'fontsize', fallback_section='common', get='getint')
         color = self._get_color(section, fallback_section='common')
+        unicode = self._get_option(section, 'unicode', False, fallback_section='common', get='getboolean')
         spacing = self._get_option(section, 'spacing', fallback_section='common', get='getint')
         align = self._get_option(section, 'spacing', 'left', fallback_section='common')
         position = map(int, self._get_option(section, 'position').split())
         font = ImageFont.truetype(font_name, font_size)
+        if unicode:
+            text = text.decode('unicode-escape')
+        text = self.format_str(section, text)
         if dst != src:
             self.buffers[dst] = self.buffers[src].copy()
         draw = ImageDraw.Draw(self.buffers[dst])

@@ -49,9 +49,9 @@ class Camera(zwoasi.Camera):
                 img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
 
                 # Take CPU temperature as system temperature
-                img_info['SystemTemperature'] = 'unknown'
+                img_info['SystemTemperature'] = float('NaN')
                 with open('/sys/class/thermal/thermal_zone0/temp') as f:
-                    img_info['SystemTemperature'] = '%.2f' % (float(f.read().strip()) / 1000)
+                    img_info['SystemTemperature'] = float(f.read().strip()) / 1000
                 return img, img_info, t
 
             finally:
@@ -70,21 +70,12 @@ class Camera(zwoasi.Camera):
             r[k] = self.get_control_value(controls[k]['ControlType'])[0]
 
         # Fix up certain keys
-        if 'Exposure' in r:
-            r['Exposure'] = '%.6f' % (r['Exposure'] / 1000000.0)
+        r['Exposure'] /= 1000000.0
         if 'Temperature' in r:
-            r['Temperature'] = '%.1f' % (r['Temperature'] / 10.0)
+            r['Temperature'] /= 10.0
         if 'Flip' in r:
             r['Flip'] = {0: 'None', 1: 'Horizontal', 2: 'Vertical', 3: 'Both'}[r['Flip']]
 
-        # Convert any remaining non-string types to string
-        for k, v in six.iteritems(r):
-            if isinstance(v, six.string_types):
-                pass
-            elif isinstance(v, float):
-                r[k] = '.1f' % v
-            else:
-                r[k] = str(v)
         return r
 
 
