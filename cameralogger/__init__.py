@@ -2,6 +2,7 @@
 import re
 import astral
 import datetime
+from fractions import Fraction
 import logging
 import lxml.etree as ET
 import numpy as np
@@ -434,6 +435,9 @@ def get_config_option(config, section, option,
 
     if get is None:
         return config.get(sec, option)
+    elif get == 'getfraction':
+        s = config.get(sec, option)
+        return Fraction(*map(int, s.split('/')))
     else:
         # For 'getboolean' etc
         return getattr(config, get)(sec, option)
