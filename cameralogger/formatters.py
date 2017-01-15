@@ -26,16 +26,75 @@ class MyFormatter(Formatter):
 
 
 class LatLon(object):
-    def __init__(self, lat=None, lon=None):
-        self.lat = lat
-        self.lon = lon
+    def __init__(self, lat, lon):
+        self._lat = lat
+        self._lon = lon
 
-    def __format__(self, fmt):
-        print(fmt)
-        if fmt == 'd':
-            # decimal degrees
-            pass
-        return '???'
+    def _dmsh(self, val, hemi):
+        is_positive = val >= 0
+
+        val = abs(val)
+        m, s = divmod(val * 3600, 60)
+        d, m = divmod(m, 60)
+        d = d if is_positive else -d
+        return int(d), int(m), s, self._hemisphere(val, hemi)
+
+    def _hemisphere(self, val, hemi):
+        if val > 0:
+           return hemi[0]
+        elif val < 0:
+            return hemi[1]
+        else:
+            return ''
+
+    @property
+    def latitude(self):
+        return abs(self._lat)
+
+    @property
+    def latitude_signed(self):
+        return self._lat
+
+    @property
+    def latitude_degrees(self):
+        return int(abs(self._lat))
+
+    @property
+    def latitude_minutes(self):
+        return self._dmsh(self._lat, ('N', 'S'))[1]
+
+    @property
+    def latitude_seconds(self):
+        return self._dmsh(self._lat, ('N', 'S'))[2]
+
+    @property
+    def latitude_hemisphere(self):
+        return self._hemisphere(self._lat, ('N', 'S'))
+
+    @property
+    def longitude(self):
+        return abs(self._lon)
+
+    @property
+    def longitude_signed(self):
+        return self._lon
+
+    @property
+    def longitude_degrees(self):
+        return int(abs(self._lon))
+
+    @property
+    def longitude_minutes(self):
+        return self._dmsh(self._lon, ('E', 'W'))[1]
+
+    @property
+    def longitude_seconds(self):
+        return self._dmsh(self._lon, ('E', 'W'))[2]
+
+    @property
+    def longitude_hemisphere(self):
+        return self._hemisphere(self._lon, ('E', 'W'))
+
 
 
 
