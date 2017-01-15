@@ -1,6 +1,5 @@
 
 import logging
-import six
 import threading
 import time
 import zwoasi
@@ -13,6 +12,7 @@ class Camera(zwoasi.Camera):
             raise Exception('no camera present')
         super(Camera, self).__init__(0)
         self.config = config
+        self.capture_image_lock = threading.Lock()
 
         # Initialise
         controls = self.get_controls()
@@ -40,7 +40,7 @@ class Camera(zwoasi.Camera):
 
     def capture_image(self):
         logger.debug('capture_image: acquiring lock')
-        if self.capture_image.lock.acquire(False):
+        if self.capture_image_lock.acquire(False):
             try:
                 logger.debug('capture_image: acquired lock')
                 t = time.time()
@@ -56,12 +56,10 @@ class Camera(zwoasi.Camera):
 
             finally:
                 logging.debug('capture_image: released lock')
-                self.capture_image.lock.release()
+                self.capture_image_lock.release()
         else:
             logger.warning('capture_image: could not acquire lock')
             raise Exception('could not acquire lock')
-
-    capture_image.lock = threading.Lock()
 
     def get_control_values(self):
         controls = self.get_controls()
