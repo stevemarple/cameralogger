@@ -460,8 +460,6 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
            '!=': operator.ne,
            'is': operator.is_,
            'is not': operator.is_not,
-           # 'in': lambda(a, b): operator.contains(b,a), # Fix reversed operands
-           # 'not in': lambda(a, b): not operator.contains(b,a), # Fix reversed operands
            'in': in_operator,
            'not in': not_in_operator,
            }
@@ -483,9 +481,7 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
     option_str = get_config_option(config, section, option,
                                    fallback_section=fallback_section)
     if op_name in ['in', 'not_in']:
-        conf_value = []
-        for s in option_str.split():
-            conf_value.append(cast(s))
+        conf_value = map(cast, option_str.split())
     else:
         conf_value = cast(option_str)
     return ops[op_name](value, conf_value)
