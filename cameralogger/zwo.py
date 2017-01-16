@@ -68,9 +68,9 @@ class Camera(zwoasi.Camera):
             r[k] = self.get_control_value(controls[k]['ControlType'])[0]
 
         # Fix up certain keys
-        r['Exposure'] /= 1000000.0
+        r['Exposure_s'] = r['Exposure'] / 1000000.0
         if 'Temperature' in r:
-            r['Temperature'] /= 10.0
+            r['SensorTemperature'] = r['Temperature'] / 10.0
         if 'Flip' in r:
             r['Flip'] = {0: 'None', 1: 'Horizontal', 2: 'Vertical', 3: 'Both'}[r['Flip']]
 
