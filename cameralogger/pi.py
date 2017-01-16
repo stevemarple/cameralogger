@@ -99,8 +99,8 @@ class Camera(object):
         r = {'DateTime': time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t)),
              'Exposure_s': self.camera.exposure_speed / 1000000.0,
              'SystemTemperature': float('NaN'),
-             'DigitalGain': self.camera.digital_gain,
-             'AnalogGain': self.camera.analog_gain,
+             'DigitalGain': float(self.camera.digital_gain),
+             'AnalogGain': float(self.camera.analog_gain),
              }
         # Take CPU temperature as system temperature
         try:
