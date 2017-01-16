@@ -183,7 +183,6 @@ class Tasks(object):
         self.buffers[dst] = Image.blend(self.buffers[src1], self.buffers[src2], alpha)
 
     def capture(self, section):
-        print('capture()')
         dst = self._get_option(section, 'dst')
         img, info, t = self.camera.capture_image()
         if self.time is None:
@@ -540,7 +539,7 @@ def get_aurorawatchuk_status(config, use_cache=True):
                 # Present and current
                 try:
                     if time_left < 30:
-                        print('Starting new thread to update status')
+                        logger.debug('Starting new thread to update status')
                         thread = threading.Thread(target=get_aurorawatchuk_status,
                                                   args=(config,),
                                                   kwargs=dict(use_cache=False))
