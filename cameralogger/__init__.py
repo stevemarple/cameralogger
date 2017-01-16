@@ -189,7 +189,7 @@ class Tasks(object):
         if self.time is None:
             self.time = t  # Record time of first capture
             self.capture_info = info
-        self.buffers[dst] = Image.fromarray(img[:, :, ::-1])  # Swap from BGR order
+        self.buffers[dst] = Image.fromarray(img)
 
     def colorize(self, section):
         src = self._get_option(section, 'src')
