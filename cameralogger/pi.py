@@ -1,29 +1,41 @@
 from fractions import Fraction
 import logging
 import numpy as np
+from picamera import PiCamera
+from picamera.array import PiRGBArray
 import threading
 import time
-from picamera import PiCamera
+import traceback
+
 from cameralogger import get_config_option
+
 
 class Camera(object):
     def __init__(self, config):
         self.config = config
         self.capture_image_lock = threading.Lock()
         self.camera = PiCamera()
+        self.use_video_port = None
 
         self.initialise()
         time.sleep(2)
 
+    def __del__(self):
+        self.camera.close()
+
     def initialise(self):
-        self.camera.stop_recording()
-        self.camera.resolution = self.camera.MAX_RESOLUTION
+        if self.camera.recording:
+            self.camera.stop_recording()
+
+        # self.camera.resolution = self.camera.MAX_RESOLUTION
 
         # Booleans
         for k in ('hflip', 'image_denoise', 'vflip', 'video_denoise'):
             val = get_config_option(self.config, 'camera', k, get='getboolean')
             if val is not None:
                 setattr(self.camera, k, val)
+
+        self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
 
         # Ints
         for k in ('brightness', 'contrast', 'exposure_compensation', 'iso', 'rotation', 'saturation', 'sensor_mode',
@@ -45,15 +57,21 @@ class Camera(object):
                 setattr(self.camera, k, val)
 
         # Fractions
-        framerate = get_config_option(self.config, 'camera', 'framerate', '1/6', get='getfraction')
+        framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
         if framerate:
-            self.camera.framerate = framerate
+            self.camera.framerate = fraction_or_float(framerate)
 
         awb_gains = get_config_option(self.config, 'camera', 'awb_gains')
         if awb_gains:
             awb_gains = awb_gains.split()
-            awb_gains = (Fraction(*map(int, awb_gains[0])), Fraction(*map(int, awb_gains[0])))
-            self.camera.awb_gains = awb_gains
+            if len(awb_gains) == 1:
+                self.camera.awb_gains = fraction_or_float(awb_gains[0])
+            else:
+                # awb_gains = (Fraction(*map(int, awb_gains[0])), Fraction(*map(int, awb_gains[0])))
+                self.camera.awb_gains = (fraction_or_float(awb_gains[0]), fraction_or_float(awb_gains[1]))
+
+        # Enable recording
+        # self.camera.start_recording()
 
     def capture_image(self):
         logger.debug('capture_image: acquiring lock')
@@ -61,17 +79,13 @@ class Camera(object):
             try:
                 logger.debug('capture_image: acquired lock')
                 t = time.time()
-                img_info = {} # self.get_control_values()
                 shape = list(self.camera.resolution)
                 shape.append(3)
-                img = np.empty(shape, dtype=np.uint8)
-                self.camera.capture(img)
-                img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
+                data = PiRGBArray(self.camera)
+                self.camera.capture(data, format='rgb', use_video_port=self.use_video_port)
+                img = data.array
+                img_info = self.get_image_settings(t)
 
-                # Take CPU temperature as system temperature
-                img_info['SystemTemperature'] = float('NaN')
-                with open('/sys/class/thermal/thermal_zone0/temp') as f:
-                    img_info['SystemTemperature'] = float(f.read().strip()) / 1000
                 return img, img_info, t
 
             finally:
@@ -81,7 +95,28 @@ class Camera(object):
             logger.warning('capture_image: could not acquire lock')
             raise Exception('could not acquire lock')
 
-    capture_image.lock = threading.Lock()
+    def get_image_settings(self, t):
+        r = {'DateTime': time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t)),
+             'Exposure_s': self.camera.exposure_speed / 1000000.0,
+             'SystemTemperature': float('NaN'),
+             'DigitalGain': self.camera.digital_gain,
+             'AnalogGain': self.camera.analog_gain,
+             }
+        # Take CPU temperature as system temperature
+        try:
+            with open('/sys/class/thermal/thermal_zone0/temp') as f:
+                r['SystemTemperature'] = float(f.read().strip()) / 1000
+        except Exception:
+            logger.warning('could not read system temperature')
+            logger.debug(traceback.format_exc())
+        return r
+
+
+def fraction_or_float(s):
+    if '/' in s:
+        return Fraction(*map(int, s.split('/')))
+    else:
+        return float(s)
 
 
 logger = logging.getLogger(__name__)
