@@ -1,10 +1,9 @@
-
 import re
 import astral
 import datetime
 from fractions import Fraction
 import logging
-import lxml.etree as ET
+import lxml.etree as etree
 import numpy as np
 import operator
 import os
@@ -13,24 +12,21 @@ from PIL import ImageDraw
 from PIL import ImageFont
 from PIL import ImageOps
 import requests
-import six
 import subprocess
 import sys
 import threading
 import time
 import traceback
-import unicodedata
-
 
 from cameralogger.formatters import MyFormatter
 from cameralogger.formatters import LatLon
 from cameralogger.smart_open import smart_open
 
 if sys.version_info[0] >= 3:
-    import configparser
-    from configparser import ImageDrawConfigParser
+    # noinspection PyCompatibility
+    from configparser import RawConfigParser
 else:
-    import ConfigParser
+    # noinspection PyCompatibility
     from ConfigParser import RawConfigParser
 
 __author__ = 'Steve Marple'
@@ -563,7 +559,7 @@ def get_aurorawatchuk_status(config, use_cache=True):
         if r.status_code != 200:
             raise Exception('could not access %s' % url)
         xml = r.text
-        xml_tree = ET.fromstring(xml.encode('UTF-8'))
+        xml_tree = etree.fromstring(xml.encode('UTF-8'))
         if xml_tree.tag != 'current_status':
             raise Exception('wrong root element')
         site_status = xml_tree.find('site_status')
@@ -582,14 +578,10 @@ def get_aurorawatchuk_status(config, use_cache=True):
             logger.error('could not save AuroraWatch UK status to cache file %s', filename)
             logger.debug(traceback.format_exc())
 
-
     except:
         logger.error('could not get AuroraWatch UK status')
         logger.debug(traceback.format_exc())
     return status
-
-
-
 
 
 # Each sampling action is made by a new thread. This function uses a
