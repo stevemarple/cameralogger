@@ -24,6 +24,7 @@ import unicodedata
 
 from cameralogger.formatters import MyFormatter
 from cameralogger.formatters import LatLon
+from cameralogger.smart_open import smart_open
 
 if sys.version_info[0] >= 3:
     import configparser
@@ -371,10 +372,15 @@ class Tasks(object):
 
     def save(self, section):
         src = self._get_option(section, 'src')
-        tm = time.gmtime(self.time)
         filename = self._get_option(section, 'filename')
+        tempfile = self._get_option(section, 'tempfile', fallback_section='common', get='getboolean', raise_=False)
+        chmod = self._get_option(section, 'chmod', fallback_section='common', raise_=False)
+        if chmod:
+            chmod = int(chmod, 8)
+        tm = time.gmtime(self.time)
         filename = time.strftime(filename, tm)
-        self.buffers[src].save(time.strftime(filename, tm))
+        with smart_open(filename, 'wb', use_temp=tempfile, chmod=chmod) as f:
+            self.buffers[src].save(f)
         logger.info('saved %s', filename)
 
     def split(self, section):
