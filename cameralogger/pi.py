@@ -106,6 +106,8 @@ class Camera(object):
         try:
             with open('/sys/class/thermal/thermal_zone0/temp') as f:
                 r['SystemTemperature'] = float(f.read().strip()) / 1000
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception:
             logger.warning('could not read system temperature')
             logger.debug(traceback.format_exc())

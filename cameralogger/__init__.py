@@ -542,10 +542,14 @@ def get_aurorawatchuk_status(config, use_cache=True):
                                                   args=(config,),
                                                   kwargs=dict(use_cache=False))
                         thread.start()
+                except (KeyboardInterrupt, SystemExit):
+                    raise
                 except Exception:
                     pass
                 return status
 
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception:
             logger.error('could not read cached AuroraWatch UK status')
             logger.debug(traceback.format_exc())
@@ -574,10 +578,14 @@ def get_aurorawatchuk_status(config, use_cache=True):
             new_cache.set('status', 'expires', expires)
             with smart_open(filename, 'w') as fh:
                 new_cache.write(fh)
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception:
             logger.error('could not save AuroraWatch UK status to cache file %s', filename)
             logger.debug(traceback.format_exc())
 
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except:
         logger.error('could not get AuroraWatch UK status')
         logger.debug(traceback.format_exc())
