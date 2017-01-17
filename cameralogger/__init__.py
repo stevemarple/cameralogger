@@ -572,7 +572,7 @@ def get_aurorawatchuk_status(config, use_cache=True):
             new_cache.add_section('status')
             new_cache.set('status', 'value', status)
             new_cache.set('status', 'expires', expires)
-            with open(filename, 'w') as fh:
+            with smart_open(filename, 'w') as fh:
                 new_cache.write(fh)
         except Exception:
             logger.error('could not save AuroraWatch UK status to cache file %s', filename)
