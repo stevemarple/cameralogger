@@ -1,5 +1,6 @@
 
 import logging
+from PIL import Image
 import threading
 import time
 import zwoasi
@@ -45,7 +46,7 @@ class Camera(zwoasi.Camera):
                 logger.debug('capture_image: acquired lock')
                 t = time.time()
                 img_info = self.get_control_values()
-                img = self.capture_video_frame()[:, :, ::-1]  # Swap from BGR order
+                img = Image.fromarray(self.capture_video_frame()[:, :, ::-1])  # Swap from BGR order
                 img_info['DateTime'] = time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t))
 
                 # Take CPU temperature as system temperature

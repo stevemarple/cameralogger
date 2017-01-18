@@ -3,6 +3,7 @@ import logging
 import numpy as np
 from picamera import PiCamera
 from picamera.array import PiRGBArray
+from PIL import Image
 import threading
 import time
 import traceback
@@ -83,7 +84,7 @@ class Camera(object):
                 shape.append(3)
                 data = PiRGBArray(self.camera)
                 self.camera.capture(data, format='rgb', use_video_port=self.use_video_port)
-                img = data.array
+                img = Image.fromarray(data.array)
                 img_info = self.get_image_settings(t)
 
                 return img, img_info, t
