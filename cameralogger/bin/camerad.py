@@ -17,7 +17,7 @@ __version__ = '0.0.2'
 __license__ = 'PSF'
 
 
-def run_camera():
+def run_camera(forced_schedule):
     global config
     global camera
     global sampling_interval
@@ -41,7 +41,7 @@ def run_camera():
         get_log_file_for_time(time.time(), log_filename)
         logger.info('Starting sampling thread')
 
-        do_every(camera, config, cameralogger.process_tasks)
+        do_every(camera, config, forced_schedule, cameralogger.process_tasks)
         while take_images:
             time.sleep(2)
 
@@ -112,16 +112,13 @@ def stop_handler(signal, frame):
         camera.close()
 
 
-def do_every(camera, config, worker_func, iterations=0):
+def do_every(camera, config, forced_schedule, worker_func, iterations=0):
     global sampling_interval
     if iterations != 1:
         # Identify current operating condition to find the actions to do and sampling interval
-        if args.schedule is not None:
-            schedule = args.schedule
-        else:
-            schedule = cameralogger.get_schedule(config)
+        schedule, schedule_info = cameralogger.get_schedule(config, forced_schedule)
         logger.info('using schedule %s', schedule)
-
+        logger.info('schedule info: %s', repr(schedule_info))
         # Schedule the next worker thread. Aim to start at the next
         # multiple of sampling interval. Take current time, add 1.25
         # of the interval and then find the nearest
@@ -137,7 +134,7 @@ def do_every(camera, config, worker_func, iterations=0):
             delay = 0.1
         t = threading.Timer(delay,
                             do_every,
-                            [camera, config, worker_func,
+                            [camera, config, forced_schedule, worker_func,
                              0 if iterations == 0 else iterations - 1])
         t.daemon = True
         t.start()
@@ -156,7 +153,7 @@ def do_every(camera, config, worker_func, iterations=0):
             logger.error('sampling_interval_lock: could not acquire lock')
 
     try:
-        worker_func(camera, config, schedule)
+        worker_func(camera, config, schedule, schedule_info)
     except Exception:
         get_log_file_for_time(time.time(), log_filename)
         logger.error(traceback.format_exc())
@@ -242,7 +239,7 @@ if __name__ == '__main__':
                         format=args.log_format, datefmt='%Y-%m-%dT%H:%M:%SZ')
 
     if (args.schedule is not None and
-            (not config.has_section(args.schedule) or not config.has_option(args.schedule, 'tasks'))):
+            (not config.has_section(args.schedule) or not config.has_option(args.schedule, 'sampling_interval'))):
         raise Exception('%s is not a valid schedule' % args.schedule)
 
     log_filename = None
@@ -252,7 +249,7 @@ if __name__ == '__main__':
     get_log_file_for_time(time.time(), log_filename)
     logger.info(progname + ' started')
 
-    run_camera()
+    run_camera(args.schedule)
 
 
 logger = logging.getLogger(__name__)

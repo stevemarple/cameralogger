@@ -12,6 +12,7 @@ from PIL import ImageDraw
 from PIL import ImageFont
 from PIL import ImageOps
 import requests
+import six
 import subprocess
 import sys
 import threading
@@ -37,13 +38,15 @@ __license__ = 'PSF'
 class Tasks(object):
     """A collection of tasks than can be performed to create, act upon and save image buffers."""
 
-    def __init__(self, camera=None, config=None, schedule=None):
+    def __init__(self, camera=None, config=None, schedule=None, schedule_info={}):
         self.camera = camera
         self.config = config
         self.schedule = schedule
+        self.schedule_info = schedule_info
         self.buffers = {}
         self.time = None
         self.capture_info = None
+        self.format_dict = None
 
     def _get_color(self, section, default=None, fallback_section=None, get=None, raise_=True, option='color'):
         color = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get,
@@ -86,20 +89,27 @@ class Tasks(object):
             return map(int, size.split())
 
     def _make_dict(self, section):
-        r = {}
+        if self.format_dict is not None:
+            return self.format_dict
+
+        d = {}
         if self.capture_info is not None:
-            # Copy all expsoure settings
-            r = self.capture_info.copy()
+            # Copy all exposure settings
+            d = self.capture_info.copy()
             # Remove subsecond part from time (datetime %S does not work as expected)
-            r['DateTime'] = datetime.datetime.utcfromtimestamp(int(self.time))
-        r['schedule'] = self.schedule
-        r['section'] = section
+            d['DateTime'] = datetime.datetime.utcfromtimestamp(int(self.time))
+        d['schedule'] = self.schedule
+        d['section'] = section
         lat = self.config.getfloat('common', 'latitude')
         lon = self.config.getfloat('common', 'longitude')
-        r['latitude'] = lat
-        r['longitude'] = lon
-        r['LatLon'] = LatLon(lat, lon)
-        return r
+        d['latitude'] = lat
+        d['longitude'] = lon
+        d['LatLon'] = LatLon(lat, lon)
+
+        for k, v in six.iteritems(self.schedule_info):
+            d[k] = v
+        self.format_dict = d
+        return self.format_dict
 
     def format_str(self, section, s):
         return MyFormatter().format(s, **self._make_dict(section))
@@ -128,6 +138,7 @@ class Tasks(object):
         if unicode:
             text = text.decode('unicode-escape')
         text = self.format_str(section, text)
+        color = self.format_str(section, color)
         if dst != src:
             self.buffers[dst] = self.buffers[src].copy()
         draw = ImageDraw.Draw(self.buffers[dst])
@@ -148,6 +159,7 @@ class Tasks(object):
         if unicode:
             text = text.decode('unicode-escape')
         text = self.format_str(section, text)
+        color = self.format_str(section, color)
         if dst != src:
             self.buffers[dst] = self.buffers[src].copy()
         draw = ImageDraw.Draw(self.buffers[dst])
@@ -491,33 +503,47 @@ def cmp_value_with_option(value, config, section, option, fallback_section='comm
     return ops[op_name](value, conf_value)
 
 
-def get_schedule(config):
+def get_schedule(config, forced_schedule=None):
+    """Get schedule to use.
+
+    Allow for schedule to be overridden for testing.
+    """
+
     t = time.time()
-    for sec in config.sections():
-        if sec in ['DEFAULT', 'common', 'daemon']:
-            continue
+    if forced_schedule:
+        sections = [forced_schedule]
+    else:
+        sections = [x for x in config.sections() if (x not in ['DEFAULT', 'common', 'daemon'] and
+                    get_config_option(config, x, 'sampling_interval') is not None)]
 
-        if get_config_option(config, sec, 'sampling_interval', fallback_section='common') is None:
-            continue
-
+    for sec in sections:
+        sec_info = {}
+        use_sec = True
         if config.has_option(sec, 'solar_elevation'):
             latitude = get_config_option(config, sec, 'latitude',
                                          fallback_section='common', default=0, get='getfloat')
             longitude = get_config_option(config, sec, 'longitude',
                                           fallback_section='common', default=0, get='getfloat')
-            val = get_solar_elevation(latitude, longitude, t)
-            if not cmp_value_with_option(val, config, sec, 'solar_elevation', fallback_section='common'):
-                continue
+            sec_info['solar_elevation'] = get_solar_elevation(latitude, longitude, t)
+            use_sec = use_sec and cmp_value_with_option(sec_info['solar_elevation'], config, sec, 'solar_elevation',
+                                                        fallback_section='common')
 
         if config.has_option(sec, 'aurorawatchuk_status'):
             awuk_status = get_aurorawatchuk_status(config)
+            use_sec = use_sec and cmp_value_with_option(awuk_status, config, sec, 'aurorawatchuk_status',
+                                                        fallback_section='common')
             descriptions = get_aurorawatchuk_descriptions(config)
-            if not cmp_value_with_option(awuk_status, config, sec, 'aurorawatchuk_status', fallback_section='common'):
-                continue
-        # All tests passed
-        return sec
+            sec_info['aurorawatchuk_status'] = awuk_status
+            sec_info['aurorawatchuk_color'] = '#' + descriptions[awuk_status]['color']
+            sec_info['aurorawatchuk_description'] = descriptions[awuk_status]['description']
+            sec_info['aurorawatchuk_meaning'] = descriptions[awuk_status]['meaning']
 
-    return 'common'
+        if not use_sec and sec != forced_schedule:
+            continue
+        # All tests passed (or schedule was forced)
+        return sec, sec_info
+
+    return 'common', {}
 
 
 def get_solar_elevation(latitude, longitude, t):
@@ -659,7 +685,7 @@ def get_aurorawatchuk_descriptions(config, use_cache=True, lang='en'):
 
             for status_elem in xml_tree.findall('status'):
                 status = status_elem.attrib['id']
-                color = status_elem.find('color').text.lstrip('#')
+                color = status_elem.find('color').text
                 description = status_elem.xpath("description[@lang='{lang}']".format(lang=lang))[0].text
                 meaning = status_elem.xpath("meaning[@lang='{lang}']".format(lang=lang))[0].text
                 r[status] = dict(color=color,
@@ -697,10 +723,10 @@ def get_aurorawatchuk_descriptions(config, use_cache=True, lang='en'):
 # sample has been taken. This means two instances of process_schedule()
 # can occur at the same time, whilst the earlier one writes data and
 # possibly sends a real-time data packet over the network.
-def process_tasks(camera, config, schedule):
+def process_tasks(camera, config, schedule, schedule_info):
     task_list = get_config_option(config, schedule, 'tasks', fallback_section='common', default='')
     logger.debug('tasks: ' + repr(task_list))
-    tasks = Tasks(camera, config, schedule)
+    tasks = Tasks(camera, config, schedule, schedule_info)
     tasks.run_tasks(task_list.split())
     return
 
