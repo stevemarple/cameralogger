@@ -411,6 +411,8 @@ def read_config_file(filename):
     config.add_section('aurorawatchuk')
     config.set('aurorawatchuk', 'status_url', 'http://aurorawatch-api.lancs.ac.uk/0.2/status/current-status.xml')
     config.set('aurorawatchuk', 'status_cache', '/home/pi/tmpfs/aurorawatchuk_status.ini')
+    config.set('aurorawatchuk', 'description_url', 'http://aurorawatch-api.lancs.ac.uk/0.2/status-descriptions.xml')
+    config.set('aurorawatchuk', 'description_cache', '/home/pi/tmpfs/aurorawatchuk_description.ini')
 
     config.add_section('upload')
     # User must add appropriate values
@@ -494,7 +496,8 @@ def get_schedule(config):
     for sec in config.sections():
         if sec in ['DEFAULT', 'common', 'daemon']:
             continue
-        if get_config_option(config, sec, 'tasks', fallback_section='common') is None:
+
+        if get_config_option(config, sec, 'sampling_interval', fallback_section='common') is None:
             continue
 
         if config.has_option(sec, 'solar_elevation'):
@@ -507,10 +510,10 @@ def get_schedule(config):
                 continue
 
         if config.has_option(sec, 'aurorawatchuk_status'):
-            val = get_aurorawatchuk_status(config)
-            if not cmp_value_with_option(val, config, sec, 'aurorawatchuk_status', fallback_section='common'):
+            awuk_status = get_aurorawatchuk_status(config)
+            descriptions = get_aurorawatchuk_descriptions(config)
+            if not cmp_value_with_option(awuk_status, config, sec, 'aurorawatchuk_status', fallback_section='common'):
                 continue
-
         # All tests passed
         return sec
 
@@ -590,6 +593,102 @@ def get_aurorawatchuk_status(config, use_cache=True):
         logger.error('could not get AuroraWatch UK status')
         logger.debug(traceback.format_exc())
     return status
+
+
+def get_aurorawatchuk_descriptions(config, use_cache=True, lang='en'):
+    filename = config.get('aurorawatchuk', 'description_cache')
+    # Try to get description from cached value if possible and current
+    if use_cache and os.path.exists(filename):
+        try:
+            cache = RawConfigParser()
+            cache.read(filename)
+            expires_str = cache.get('expires', 'expires')
+            expires = time.mktime(datetime.datetime.strptime(expires_str, '%a, %d %b %Y %H:%M:%S %Z').utctimetuple())
+            time_left = expires - time.time()
+            if time_left > 0:
+                # Present and current
+                description = {}
+                for section in cache.sections():
+                    if section == 'expires':
+                        continue
+                    description[section] = {}
+                    for option in cache.options(section):
+                        description[section][option] = cache.get(section, option)
+
+                if time_left < 300:
+                    try:
+                        logger.debug('Starting new thread to update description')
+                        thread = threading.Thread(target=get_aurorawatchuk_descriptions,
+                                                  args=(config,),
+                                                  kwargs=dict(use_cache=False))
+                        thread.start()
+                    except (KeyboardInterrupt, SystemExit):
+                        raise
+                    except Exception:
+                        pass
+
+                return description
+
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            logger.error('could not read cached AuroraWatch UK description')
+            logger.debug(traceback.format_exc())
+
+    # Fetch current description
+    url = config.get('aurorawatchuk', 'description_url')
+    r = {}
+    try:
+        logger.info('fetching description from %s', url)
+        req = requests.get(url)
+        if req.status_code != 200:
+            raise Exception('could not access %s' % url)
+
+        # Cache results for next time
+        try:
+            xml = req.text
+            xml_tree = etree.fromstring(xml.encode('UTF-8'))
+
+            if xml_tree.tag != 'status_list':
+                raise Exception('wrong root element')
+
+            expires = req.headers['Expires']
+            new_cache = RawConfigParser()
+            new_cache.add_section('expires')
+            new_cache.set('expires', 'expires', expires)
+
+            for status_elem in xml_tree.findall('status'):
+                status = status_elem.attrib['id']
+                color = status_elem.find('color').text.lstrip('#')
+                description = status_elem.xpath("description[@lang='{lang}']".format(lang=lang))[0].text
+                meaning = status_elem.xpath("meaning[@lang='{lang}']".format(lang=lang))[0].text
+                r[status] = dict(color=color,
+                                 description=description,
+                                 meaning=meaning)
+                new_cache.add_section(status)
+                new_cache.set(status, 'color', color)
+                new_cache.set(status, 'description', description)
+                new_cache.set(status, 'meaning', meaning)
+
+            with smart_open(filename, 'w') as fh:
+                new_cache.write(fh)
+
+        except (KeyboardInterrupt, SystemExit):
+            raise
+
+        except Exception:
+            logger.error('could not save AuroraWatch UK description to cache file %s', filename)
+            logger.debug(traceback.format_exc())
+            raise
+
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except:
+        logger.error('could not get AuroraWatch UK description')
+        logger.debug(traceback.format_exc())
+        raise
+
+    return r
 
 
 # Each sampling action is made by a new thread. This function uses a
