@@ -14,7 +14,7 @@ class smart_open:
     already exist.
 
     2. When opening a file for write access it is created with a
-    temporary name ('.tmp' appended) and if there are no errors it is
+    temporary name (with same same extension) and if there are no errors it is
     renamed automatically when closed. In the case of errors the
     default is to delete the temporary file (set delete_temp_on_error
     to False to keep the temporary file).
