@@ -108,8 +108,7 @@ def stop_handler(signal, frame):
     take_images = False
     cancel_sampling_threads()
     if camera:
-        camera.stop_video_capture()
-        camera.close()
+        camera = None
 
 
 def do_every(camera, config, forced_schedule, worker_func, iterations=0):
