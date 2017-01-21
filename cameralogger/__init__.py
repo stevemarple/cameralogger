@@ -211,7 +211,7 @@ class Tasks(object):
         cmd = self._get_option(section, 'cmd')
         check_call = self._get_option(section, 'check_call', True, get='getboolean')
         background = self._get_option(section, 'background', False, get='getboolean')
-        cmd = self._format_str(section, cmd)
+        cmd = self.format_str(section, cmd)
         if check_call:
             logger.debug('running command "%s"', cmd)
             subprocess.check_call(cmd, shell=True)
