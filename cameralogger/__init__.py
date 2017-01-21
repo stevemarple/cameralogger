@@ -21,7 +21,7 @@ import traceback
 
 from cameralogger.formatters import MyFormatter
 from cameralogger.formatters import LatLon
-from cameralogger.smart_open import smart_open
+from atomiccreate import smart_open
 
 if sys.version_info[0] >= 3:
     # noinspection PyCompatibility
