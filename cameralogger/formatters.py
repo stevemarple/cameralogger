@@ -8,6 +8,8 @@ class MyFormatter(Formatter):
         # do any conversion on the resulting object
         if conversion is None:
             return value
+        elif conversion == 'a':
+            return value.encode('ascii')
         elif conversion == 's':
             return str(value)
         elif conversion == 'r':
