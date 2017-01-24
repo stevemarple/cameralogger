@@ -57,7 +57,8 @@ def run_camera(forced_schedule):
             if threading.activeCount() == 1:
                 break
             time.sleep(1)
-
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception:
         get_log_file_for_time(time.time(), log_filename)
         logger.error(traceback.format_exc())
@@ -153,6 +154,8 @@ def do_every(camera, config, forced_schedule, worker_func, iterations=0):
 
     try:
         worker_func(camera, config, schedule, schedule_info)
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception:
         get_log_file_for_time(time.time(), log_filename)
         logger.error(traceback.format_exc())
