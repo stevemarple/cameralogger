@@ -98,12 +98,12 @@ class Tasks(object):
             d = self.capture_info.copy()
             # Remove subsecond part from time (datetime %S does not work as expected)
             d['DateTime'] = datetime.datetime.utcfromtimestamp(int(self.time))
-        d['schedule'] = self.schedule
-        d['section'] = section
+        d['Schedule'] = self.schedule
+        d['Section'] = section
         lat = self.config.getfloat('common', 'latitude')
         lon = self.config.getfloat('common', 'longitude')
-        d['latitude'] = lat
-        d['longitude'] = lon
+        d['Latitude'] = lat
+        d['Longitude'] = lon
         d['LatLon'] = LatLon(lat, lon)
 
         for k, v in six.iteritems(self.schedule_info):
