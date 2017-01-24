@@ -315,7 +315,7 @@ class Tasks(object):
 
     def load(self, section):
         dst = self._get_option(section, 'dst')
-        filename = self._get_option(section, 'filename')
+        filename = self.format_str(section, self._get_option(section, 'filename'))
         self.buffers[dst] = Image.open(filename)
 
     def mirror(self, section):
@@ -380,13 +380,11 @@ class Tasks(object):
 
     def save(self, section):
         src = self._get_option(section, 'src')
-        filename = self._get_option(section, 'filename')
+        filename = self.format_str(section, self._get_option(section, 'filename'))
         tempfile = self._get_option(section, 'tempfile', fallback_section='common', get='getboolean', raise_=False)
         chmod = self._get_option(section, 'chmod', fallback_section='common', raise_=False)
         if chmod:
             chmod = int(chmod, 8)
-        tm = time.gmtime(self.time)
-        filename = time.strftime(filename, tm)
         with smart_open(filename, 'wb', use_temp=tempfile, chmod=chmod) as f:
             self.buffers[src].save(f)
         logger.info('saved %s', filename)
