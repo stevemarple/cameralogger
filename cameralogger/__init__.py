@@ -136,7 +136,7 @@ class Tasks(object):
         position = map(int, self._get_option(section, 'position').split())
         font = ImageFont.truetype(font_name, font_size)
         if unicode:
-            text = text.decode('unicode-escape')
+            text = unescape_unicode(text)
         text = self.format_str(section, text)
         color = self.format_str(section, color)
         if dst != src:
@@ -154,10 +154,10 @@ class Tasks(object):
         unicode = self._get_option(section, 'unicode', False, fallback_section='common', get='getboolean')
         spacing = self._get_option(section, 'spacing', fallback_section='common', get='getint')
         align = self._get_option(section, 'spacing', 'left', fallback_section='common')
-        position = map(int, self._get_option(section, 'position').split())
+        position = list(map(int, self._get_option(section, 'position').split()))
         font = ImageFont.truetype(font_name, font_size)
         if unicode:
-            text = text.decode('unicode-escape')
+            text = unescape_unicode(text)
         text = self.format_str(section, text)
         color = self.format_str(section, color)
         if dst != src:
@@ -270,7 +270,7 @@ class Tasks(object):
             size = self._get_size(section)
             if len(size) == 1:
                 size.append(size[0])
-            position = map(int, self._get_option(section, 'position', 0).split())
+            position = list(map(int, self._get_option(section, 'position', 0).split()))
             if len(position) == 1:
                 position.append(position[0])
             src_size = self.buffers[src].size
@@ -410,6 +410,12 @@ class Tasks(object):
         method = getattr(Image, self._get_option(section, 'method'))
         self.buffers[dst] = self.buffers[src].tranpose(method)
 
+
+def unescape_unicode(s):
+    if sys.version_info[0] >= 3:
+        return bytes(s, 'UTF-8').decode('unicode-escape')
+    else:
+        return s.decode('unicode-escape')
 
 def read_config_file(filename):
     """Read config file."""
