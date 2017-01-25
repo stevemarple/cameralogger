@@ -38,6 +38,10 @@ class Camera(object):
                 setattr(self.camera, k, val)
 
         self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
+        # Fractions
+        framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
+        if framerate:
+            self.camera.framerate = fraction_or_float(framerate)
 
         # Ints
         for k in ('brightness', 'contrast', 'exposure_compensation', 'iso', 'rotation', 'saturation', 'sensor_mode',
@@ -59,11 +63,6 @@ class Camera(object):
             if val is not None:
                 logger.debug('setting %s=%s', k, val)
                 setattr(self.camera, k, val)
-
-        # Fractions
-        framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
-        if framerate:
-            self.camera.framerate = fraction_or_float(framerate)
 
         awb_gains = get_config_option(self.config, 'camera', 'awb_gains')
         if awb_gains:
