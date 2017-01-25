@@ -61,7 +61,7 @@ class Camera(object):
                 setattr(self.camera, k.upper(), val)
 
         # Strings
-        for k in ('awb_mode', 'drc_strength', 'exposure_mode', 'meter_mode', 'resolution', ):
+        for k in ('awb_mode', 'drc_strength', 'exposure_mode', 'meter_mode', 'resolution', 'still_stats'):
             val = get_config_option(self.config, 'camera', k)
             if val is not None:
                 logger.debug('setting %s=%s', k, val)
