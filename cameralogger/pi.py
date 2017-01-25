@@ -100,11 +100,13 @@ class Camera(object):
             raise Exception('could not acquire lock')
 
     def get_image_settings(self, t):
-        r = {'DateTime': time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t)),
-             'Exposure_s': self.camera.exposure_speed / 1000000.0,
+        r = {'Exposure_s': self.camera.exposure_speed / 1000000.0,
+             'ExposureMode': self.camera.exposure_mode,
              'SystemTemperature': float('NaN'),
+             'ISO': int(self.camera.iso),
              'DigitalGain': float(self.camera.digital_gain),
              'AnalogGain': float(self.camera.analog_gain),
+             'SensorMode': int(self.camera.sensor_mode),
              }
         # Take CPU temperature as system temperature
         try:
