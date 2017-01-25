@@ -34,6 +34,7 @@ class Camera(object):
         for k in ('hflip', 'image_denoise', 'vflip', 'video_denoise'):
             val = get_config_option(self.config, 'camera', k, get='getboolean')
             if val is not None:
+                logger.debug('setting %s=%s', k, 'true' if val else 'false')
                 setattr(self.camera, k, val)
 
         self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
@@ -43,6 +44,7 @@ class Camera(object):
                   'sharpness', 'shutter_speed'):
             val = get_config_option(self.config, 'camera', k, get='getint')
             if val is not None:
+                logger.debug('setting %s=%d', k, val)
                 setattr(self.camera, k, val)
 
         # Ints (uppercase in PiCamera)
@@ -55,6 +57,7 @@ class Camera(object):
         for k in ('awb_mode', 'drc_strength', 'exposure_mode', 'meter_mode', 'resolution', ):
             val = get_config_option(self.config, 'camera', k)
             if val is not None:
+                logger.debug('setting %s=%s', k, val)
                 setattr(self.camera, k, val)
 
         # Fractions
