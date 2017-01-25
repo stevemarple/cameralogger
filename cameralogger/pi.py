@@ -17,6 +17,7 @@ class Camera(object):
         self.capture_image_lock = threading.Lock()
         self.camera = PiCamera()
         self.use_video_port = None
+        self.splitter_port = None
 
         self.initialise()
         time.sleep(2)
@@ -38,6 +39,8 @@ class Camera(object):
                 setattr(self.camera, k, val)
 
         self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
+        self.splitter_port = get_config_option(self.config, 'camera', 'splitter_port', 1, get='getint')
+
         # Fractions
         framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
         if framerate:
@@ -85,7 +88,10 @@ class Camera(object):
                 shape = list(self.camera.resolution)
                 shape.append(3)
                 data = PiRGBArray(self.camera)
-                self.camera.capture(data, format='rgb', use_video_port=self.use_video_port)
+                self.camera.capture(data,
+                                    format='rgb',
+                                    use_video_port=self.use_video_port,
+                                    splitter_port=self.splitter_port)
                 img = Image.fromarray(data.array)
                 img_info = self.get_image_settings(t)
 
