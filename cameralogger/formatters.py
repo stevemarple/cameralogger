@@ -66,7 +66,7 @@ class DegMS(object):
         return int(d), int(m), s, self._hemisphere()
 
     @property
-    def degrees(self):
+    def unsigned_degrees(self):
         return abs(self._val)
 
     @property
