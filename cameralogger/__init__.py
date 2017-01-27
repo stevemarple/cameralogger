@@ -101,11 +101,10 @@ class Tasks(object):
             d['DateTime'] = datetime.datetime.utcfromtimestamp(int(self.time))
         d['Schedule'] = self.schedule
         d['Section'] = section
-        lat = self.config.getfloat('common', 'latitude')
-        lon = self.config.getfloat('common', 'longitude')
-        d['Latitude'] = lat
-        d['Longitude'] = lon
-        d['LatLon'] = LatLon(lat, lon)
+        lat = self._get_option(section, 'latitude', fallback_section='common', get='getfloat')
+        lon = self._get_option(section, 'longitude', fallback_section='common', get='getfloat')
+        lat_lon = LatLon(lat, lon)
+        d['LatLon'] = lat_lon
 
         for k, v in six.iteritems(self.schedule_info):
             d[k] = v
@@ -521,11 +520,11 @@ def get_schedule(config, forced_schedule=None):
                                                      get_config_option(config, x, 'sampling_interval') is not None)]
 
     for sec in sections:
-        info['Latitude'] = get_config_option(config, sec, 'latitude',
+        lat = get_config_option(config, sec, 'latitude',
                                              fallback_section='common', default=0, get='getfloat')
-        info['Longitude'] = get_config_option(config, sec, 'longitude',
+        lon = get_config_option(config, sec, 'longitude',
                                               fallback_section='common', default=0, get='getfloat')
-        info['SolarElevation'] = get_solar_elevation(info['Latitude'], info['Longitude'], t)
+        info['SolarElevation'] = get_solar_elevation(lat, lon, t)
 
         if config.has_option(sec, 'solar_elevation') \
             and not cmp_value_with_option(info['SolarElevation'], config, sec, 'solar_elevation',
