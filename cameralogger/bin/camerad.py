@@ -13,7 +13,7 @@ import traceback
 import cameralogger
 
 __author__ = 'Steve Marple'
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 __license__ = 'PSF'
 
 
