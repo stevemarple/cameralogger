@@ -1,9 +1,9 @@
-import re
 import astral
+from atomiccreate import atomic_symlink
+from atomiccreate import smart_open
 import datetime
 from fractions import Fraction
 import logging
-import lxml.etree as etree
 import numpy as np
 import operator
 import os
@@ -11,17 +11,16 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 from PIL import ImageOps
-import requests
+import re
 import six
 import subprocess
 import sys
-import threading
 import time
 import traceback
 
+
 from cameralogger.formatters import MyFormatter
 from cameralogger.formatters import LatLon
-from atomiccreate import smart_open
 from aurorawatchuk.snapshot import AuroraWatchUK as  AuroraWatchUK_SS
 
 if sys.version_info[0] >= 3:
@@ -401,6 +400,25 @@ class Tasks(object):
         threshold = self._get_option(section, 'bits', 128, get='getint')
         dst = self._get_option(section, 'dst', src)
         self.buffers[dst] = ImageOps.solarize(self.buffers[src], threshold)
+
+    def symlink(self, section):
+        src_filename = self.format_str(section, self._get_option(section, 'src_filename'))
+        dst_filename = self.format_str(section, self._get_option(section, 'dst_filename'))
+        raise_ = self._get_option(section, 'raise', True, fallback_section='common', get='getboolean')
+        tempfile = self._get_option(section, 'tempfile', False, fallback_section='common', get='getboolean', raise_=False)
+        try:
+            if tempfile:
+                atomic_symlink(src_filename, dst_filename)
+            else:
+                os.symlink(src_filename, dst_filename)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            if raise_:
+                raise
+            else:
+                logger.error('Could not create symlink %s -> %s', src_filename, dst_filename)
+                logger.debug(traceback.format_exc())
 
     def transpose(self, section):
         src = self._get_option(section, 'src')
