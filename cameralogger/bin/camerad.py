@@ -216,7 +216,7 @@ if __name__ == '__main__':
         os.path.join(os.path.sep, 'etc', 'camera.ini')
 
     parser = \
-        argparse.ArgumentParser(description='AuroraWatch camera daemon')
+        argparse.ArgumentParser(description='Process and save images from a camera')
 
     parser.add_argument('-c', '--config-file',
                         default=default_config_file,
