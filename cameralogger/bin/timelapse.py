@@ -74,6 +74,8 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
     # TODO: Add code to run tasks at start/end of time lapse, eg add text, dissolving to/from first/last frames
     if resolution is None:
         resolution = tuple(first_frame.size)
+    else:
+        resolution = tuple(resolution)  # Force to be tuple so that img.size comparison works later
 
     # Set up a subprocess to run ffmpeg
     cmd = ('ffmpeg',
@@ -146,6 +148,11 @@ if __name__ == '__main__':
                         type=float,
                         help='Input frame rate',
                         metavar='FPS')
+    parser.add_argument('--resolution',
+                        nargs=2,
+                        type=int,
+                        help='Video resolution',
+                        metavar=('WIDTH', 'HEIGHT'))
     parser.add_argument('-s', '--start-time',
                         required=True,
                         help='Start time for time lapse')
@@ -187,4 +194,5 @@ if __name__ == '__main__':
 
     ffmpeg(start_time, end_time, args.step, args.fstr, args.output,
            ofr=args.output_frame_rate,
+           resolution=args.resolution,
            **kwargs)
