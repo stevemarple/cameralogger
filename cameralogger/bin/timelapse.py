@@ -40,7 +40,7 @@ def find_start_end_frames(st, et, step, filename_fstr):
 
 
 def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
-           resolution=None, duration=None, ifr=None, ofr=None):
+           resolution=None, duration=None, speed_up=None, ifr=None, ofr=None):
     img_mode = 'RGB'  # Mode for all images
     # Remember et is inclusive
     st, et = find_start_end_frames(start_time.astype('datetime64[s]').astype(int),
@@ -50,15 +50,16 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
     if st is None:
         raise ValueError('could not find any images in time range')
 
-    frames = (et - st) / step  # Includes repeated frames
-    if ifr is None:
-        if duration is not None:
-            ifr = round(float(frames) / duration)
-            print(frames)
-            print(duration)
-            print(ifr)
-        else:
-            ifr = 1
+    input_duration = et - st
+    frames = input_duration / step  # Includes repeated frames
+    if ifr is not None:
+        pass
+    elif duration is not None:
+        ifr = round(float(frames) / duration)
+    elif speed_up is not None:
+        ifr = speed_up * float(frames) / input_duration
+    elif ifr is None:
+        ifr = float(frames) / input_duration
 
     if ofr is None:
         ofr = 60
@@ -79,10 +80,11 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
            '-loglevel', 'error',
            '-y',  # overwrite
            '-framerate', str(ifr),  # input frame rate
-           '-s', '%dx%d' % (resolution[0], resolution[1]),  # size of image string
+           '-s', '%dx%d' % (resolution[0], resolution[1]),  # size of image
            '-pix_fmt', 'rgb24',  # format
-           '-f', 'rawvideo', '-i', '-',  # tell ffmpeg to expect raw video from the pipe
-           '-vcodec', 'libx264',  # output encoding
+           '-f', 'rawvideo',
+           '-i', '-',  # read from stdin
+           '-vcodec', 'libx264',  # set output encoding
            '-r', str(ofr),  # output frame rate
            output_filename)
     logger.info('Running command ' + ' '.join(cmd))
@@ -124,10 +126,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config-file',
                         default=default_config_file,
                         help='Configuration file')
-    parser.add_argument('-d', '--duration',
-                        type=float,
-                        help='Duration',
-                        metavar='SECONDS')
+
     parser.add_argument('-e', '--end-time',
                         required=True,
                         help='End time for time lapse')
@@ -143,14 +142,34 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output',
                         required=True,
                         help='Output filename')
+    parser.add_argument('-r', '--output-frame-rate',
+                        type=float,
+                        help='Input frame rate',
+                        metavar='FPS')
     parser.add_argument('-s', '--start-time',
                         required=True,
                         help='Start time for time lapse')
     parser.add_argument('--step',
                         default=1,
-                        type=int,  # Could this be float?
-                        help='Time step',
+                        type=float,
+                        help='Time step between images',
                         metavar='SECONDS')
+
+    # Offer multiple methods to set the input frame rate
+    ifr_group = parser.add_mutually_exclusive_group()
+    ifr_group.add_argument('-d', '--duration',
+                           type=float,
+                           help='Set output duration for timelapse',
+                           metavar='SECONDS')
+    ifr_group.add_argument('-i', '--input-frame-rate',
+                           type=float,
+                           help='Input frame rate',
+                           metavar='FPS')
+    ifr_group.add_argument('--speed-up',
+                           type=float,
+                           help='Playback speed as ratio to real time',
+                           metavar='FPS')
+
     args = parser.parse_args()
 
     logging.basicConfig(level=getattr(logging, args.log_level.upper()))
@@ -158,65 +177,14 @@ if __name__ == '__main__':
     start_time = np.datetime64(args.start_time, 's')
     end_time = np.datetime64(args.end_time, 's')
 
-    ffmpeg(start_time, end_time, args.step, args.fstr, args.output, duration=args.duration)
+    kwargs = {}
+    if args.input_frame_rate is not None:
+        kwargs['ifr'] = args.input_frame_rate
+    elif args.speed_up is not None:
+        kwargs['speed_up'] = args.speed_up
+    else:
+        kwargs['duration'] = args.duration
 
-
-#
-#     # Find the first and last images
-# #start_time = np.datetime64('2017-01-26T20:00:08Z')
-# #end_time = np.datetime64('2017-01-26T21:00:00Z')
-# start_time = np.datetime64('2017-01-26T19:22:32Z')
-# end_time = np.datetime64('2017-01-26T22:00:00Z')
-# step = 1
-# filename_fstr = '/home/marple/picam/{DateTime:%Y%m%dT%H%M%S}.jpg'
-#
-# output_filename = '/tmp/movie.mp4'
-#
-#
-# if st is None:
-#     raise Exception('no images found')
-#
-#
-# proc = None
-# t = st
-# first_frame = True
-#
-# while t <= et:
-#     dt = datetime.datetime.fromtimestamp(t)
-#     filename = filename_fstr.format(DateTime=dt)
-#     if os.path.exists(filename):
-#         logger.info('reading %s', filename)
-#         img = Image.open(filename).convert('RGB')
-#     elif first_frame:
-#         logger.debug('missing %s', filename)
-#         t += step
-#         continue
-#     else:
-#         logger.debug('missing intermediate image %s', filename)
-#         # img = Image.new('RGB', img_size)
-#
-#     if first_frame:
-#         first_frame = False
-#         img_size = img.size
-#         cmd = ('ffmpeg',
-#                '-loglevel', 'error',
-#                '-y',  # overwrite
-#                '-framerate', '329',  # input frame rate
-#                '-s', '%dx%d' % (img_size[0], img_size[1]),  # size of image string
-#                '-pix_fmt', 'rgb24',  # format
-#                '-f', 'rawvideo', '-i', '-',  # tell ffmpeg to expect raw video from the pipe
-#                '-vcodec', 'libx264', # output encoding
-#                '-r', '30',  # output frame rate
-#                output_filename)
-#         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-#
-#     proc.stdin.write(img.tobytes())
-#     t += step
-#
-#
-#
-# if proc:
-#     proc.communicate()
-# else:
-#     raise Exception('no images found')
-#
+    ffmpeg(start_time, end_time, args.step, args.fstr, args.output,
+           ofr=args.output_frame_rate,
+           **kwargs)
