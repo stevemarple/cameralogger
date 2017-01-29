@@ -11,7 +11,7 @@ import subprocess
 
 __author__ = 'Steve Marple'
 __version__ = '0.0.6'
-__license__ = 'PSF'
+__license__ = 'MIT'
 
 
 def find_start_end_frames(st, et, step, filename_fstr):

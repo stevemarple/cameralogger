@@ -1,9 +1,13 @@
-
 import logging
 from PIL import Image
 import threading
 import time
 import zwoasi
+
+
+__author__ = 'Steve Marple'
+__version__ = '0.0.6'
+__license__ = 'MIT'
 
 
 class Camera(object):

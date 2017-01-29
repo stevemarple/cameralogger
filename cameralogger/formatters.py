@@ -1,6 +1,11 @@
 from string import Formatter
 
 
+__author__ = 'Steve Marple'
+__version__ = '0.0.6'
+__license__ = 'MIT'
+
+
 class MyFormatter(Formatter):
     def __init__(self):
         Formatter.__init__(self)

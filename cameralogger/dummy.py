@@ -5,6 +5,11 @@ import threading
 import time
 
 
+__author__ = 'Steve Marple'
+__version__ = '0.0.6'
+__license__ = 'MIT'
+
+
 class Camera(object):
     def __init__(self, config):
         self.config = config
