@@ -12,7 +12,7 @@ from cameralogger import get_config_option
 
 
 __author__ = 'Steve Marple'
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 __license__ = 'MIT'
 
 
