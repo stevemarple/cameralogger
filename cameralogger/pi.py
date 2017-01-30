@@ -84,6 +84,11 @@ class Camera(object):
             try:
                 logger.debug('capture_image: acquired lock')
                 t = time.time()
+                if self.use_video_port and not self.camera.frame.complete:
+                    # With long exposures the camera has not started producing valid frames. Attempting to
+                    # record now mean the thread hangs and prevents other captures later.
+                    raise Exception('no video frame to capture')
+
                 shape = list(self.camera.resolution)
                 shape.append(3)
                 data = PiRGBArray(self.camera)
