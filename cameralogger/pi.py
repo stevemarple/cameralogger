@@ -33,15 +33,6 @@ class Camera(object):
         if self.camera.recording:
             self.camera.stop_recording()
 
-        # self.camera.resolution = self.camera.MAX_RESOLUTION
-
-        # Booleans
-        for k in ('hflip', 'image_denoise', 'vflip', 'video_denoise'):
-            val = get_config_option(self.config, 'camera', k, get='getboolean')
-            if val is not None:
-                logger.debug('setting %s=%s', k, 'true' if val else 'false')
-                setattr(self.camera, k, val)
-
         self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
         self.splitter_port = get_config_option(self.config, 'camera', 'splitter_port', 1, get='getint')
 
@@ -49,6 +40,13 @@ class Camera(object):
         framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
         if framerate:
             self.camera.framerate = fraction_or_float(framerate)
+
+        # Booleans
+        for k in ('hflip', 'image_denoise', 'vflip', 'video_denoise'):
+            val = get_config_option(self.config, 'camera', k, get='getboolean')
+            if val is not None:
+                logger.debug('setting %s=%s', k, 'true' if val else 'false')
+                setattr(self.camera, k, val)
 
         # Ints
         for k in ('brightness', 'contrast', 'exposure_compensation', 'iso', 'rotation', 'saturation', 'sensor_mode',
