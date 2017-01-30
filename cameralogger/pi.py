@@ -27,6 +27,8 @@ class Camera(object):
         time.sleep(2)
 
     def __del__(self):
+        if self.camera.recording:
+            self.camera.stop_recording()
         self.camera.close()
 
     def initialise(self):
@@ -72,8 +74,9 @@ class Camera(object):
                 # awb_gains = (Fraction(*map(int, awb_gains[0])), Fraction(*map(int, awb_gains[0])))
                 self.camera.awb_gains = (fraction_or_float(awb_gains[0]), fraction_or_float(awb_gains[1]))
 
-        # Enable recording
-        # self.camera.start_recording()
+        if self.use_video_port:
+            # Enable recording
+            self.camera.start_recording(NullStream(), format='yuv')
 
     def capture_image(self, section):
         logger.debug('capture_image: acquiring lock')
@@ -119,6 +122,14 @@ class Camera(object):
             logger.warning('could not read system temperature')
             logger.debug(traceback.format_exc())
         return r
+
+
+class NullStream(object):
+    def __init__(self):
+        pass
+
+    def write(self, _):
+        pass
 
 
 def fraction_or_float(s):
