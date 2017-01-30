@@ -47,7 +47,7 @@ class Camera(object):
         self.camera.stop_video_capture()
         self.camera.close()
 
-    def capture_image(self):
+    def capture_image(self, _):
         logger.debug('capture_image: acquiring lock')
         if self.capture_image_lock.acquire(False):
             try:

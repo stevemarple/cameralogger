@@ -84,7 +84,7 @@ class Camera(object):
         # Enable recording
         # self.camera.start_recording()
 
-    def capture_image(self):
+    def capture_image(self, section):
         logger.debug('capture_image: acquiring lock')
         if self.capture_image_lock.acquire(False):
             try:

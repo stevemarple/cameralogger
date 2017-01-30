@@ -192,7 +192,7 @@ class Tasks(object):
 
     def capture(self, section):
         dst = self._get_option(section, 'dst')
-        img, info, t = self.camera.capture_image()
+        img, info, t = self.camera.capture_image(section)
         if self.time is None:
             self.time = t  # Record time of first capture
             self.capture_info = info

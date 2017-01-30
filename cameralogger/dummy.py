@@ -16,7 +16,7 @@ class Camera(object):
         self.file_gen = self.get_next_file()
         self.capture_image_lock = threading.Lock()
 
-    def capture_image(self):
+    def capture_image(self, _):
         logger.debug('capture_image: acquiring lock')
         if self.capture_image_lock.acquire(False):
             try:
