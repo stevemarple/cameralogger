@@ -58,12 +58,6 @@ class Camera(object):
                 logger.debug('setting %s=%d', k, val)
                 setattr(self.camera, k, val)
 
-        # Ints (uppercase in PiCamera)
-        for k in ('capture_timeout', ):
-            val = get_config_option(self.config, 'camera', k, get='getint')
-            if val is not None:
-                setattr(self.camera, k.upper(), val)
-
         # Strings
         for k in ('awb_mode', 'drc_strength', 'exposure_mode', 'meter_mode', 'resolution', 'still_stats'):
             val = get_config_option(self.config, 'camera', k)
