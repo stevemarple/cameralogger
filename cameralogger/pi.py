@@ -36,7 +36,7 @@ class Camera(object):
             self.camera.stop_recording()
 
         self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
-        self.splitter_port = get_config_option(self.config, 'camera', 'splitter_port', 1, get='getint')
+        self.splitter_port = get_config_option(self.config, 'camera', 'splitter_port', 0, get='getint')
 
         # Fractions
         framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
