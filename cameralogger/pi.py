@@ -1,6 +1,5 @@
 from fractions import Fraction
 import logging
-import numpy as np
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from PIL import Image
