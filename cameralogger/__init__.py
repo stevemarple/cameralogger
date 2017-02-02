@@ -411,6 +411,7 @@ class Tasks(object):
                 atomic_symlink(src_filename, dst_filename)
             else:
                 os.symlink(src_filename, dst_filename)
+            logger.info('created symlink %s -> %s', src_filename, dst_filename)
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
