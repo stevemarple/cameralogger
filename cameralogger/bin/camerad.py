@@ -12,6 +12,7 @@ import traceback
 
 import cameralogger
 
+
 __author__ = 'Steve Marple'
 __version__ = '0.0.9'
 __license__ = 'MIT'
@@ -33,6 +34,7 @@ def run_camera(forced_schedule):
 
     Camera = getattr(importlib.import_module('cameralogger.' + camera_type), 'Camera')
     camera = Camera(config)
+    camera.apply_settings('camera')
 
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
@@ -139,6 +141,34 @@ def do_every(camera, config, forced_schedule, worker_func, iterations=0):
         t.daemon = True
         t.start()
 
+        # Check if the schedule has changed, if so apply any new settings. To access last_schedule and camera
+        # the camera_lock must be acquired
+        if config.has_option(schedule, 'camera_settings'):
+            if camera_lock.acquire(False):
+                try:
+                    global last_schedule
+                    logger.debug('camera_lock: acquired lock')
+                    if schedule != last_schedule:
+                        settings_section = config.get(schedule, 'camera_settings')
+                        if not config.has_section(settings_section):
+                            logger.error('cannot apply camera settings for schedule %s: section %s does not exist',
+                                         schedule, settings_section)
+                            raise Exception('missing section %s' % settings_section)
+
+                        if last_schedule is not None and settings_section == config.get(last_schedule,
+                                                                                        'camera_settings'):
+                            # No action needed
+                            logger.debug('schedule changed but camera settings unchanged')
+                        else:
+                            logger.debug('schedule changed, applying new settings for %s from section %s',                                 schedule, settings_section)
+                            camera.apply_settings(settings_section)
+                        last_schedule = schedule  # Update last, after settings have been applied
+                finally:
+                    camera_lock.release()
+                    logging.debug('camera_lock: released lock')
+            else:
+                logger.error('camera_lock: could not acquire lock')
+
         # Update the global sampling_interval so that cancel_sampling_threads knows how long to wait.
         # This could be attempted by multiple capture threads so must use a lock. Don't wait for the lock to be
         # available.
@@ -202,10 +232,16 @@ def get_log_file_for_time(t, fstr,
 
 get_log_file_for_time.fh = None
 
+camera_lock = threading.Lock()
+# Access to camera and last_schedule controlled by camera_lock
 camera = None
+last_schedule = None
+
 default_sampling_interval = 120
-sampling_interval = default_sampling_interval
+
 sampling_interval_lock = threading.Lock()
+# Access to sampling_interval controlled by sampling_interval_lock
+sampling_interval = default_sampling_interval
 
 if __name__ == '__main__':
 

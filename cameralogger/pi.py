@@ -23,29 +23,26 @@ class Camera(object):
         self.use_video_port = None
         self.splitter_port = None
 
-        self.initialise()
-        time.sleep(2)
-
     def __del__(self):
         if self.camera.recording:
             self.camera.stop_recording()
         self.camera.close()
 
-    def initialise(self):
+    def apply_settings(self, section):
         if self.camera.recording:
             self.camera.stop_recording()
 
-        self.use_video_port = get_config_option(self.config, 'camera', 'use_video_port', get='getboolean')
-        self.splitter_port = get_config_option(self.config, 'camera', 'splitter_port', 0, get='getint')
+        self.use_video_port = get_config_option(self.config, section, 'use_video_port', get='getboolean')
+        self.splitter_port = get_config_option(self.config, section, 'splitter_port', 0, get='getint')
 
         # Fractions
-        framerate = get_config_option(self.config, 'camera', 'framerate', '1/6')
+        framerate = get_config_option(self.config, section, 'framerate', '1/6')
         if framerate:
             self.camera.framerate = fraction_or_float(framerate)
 
         # Booleans
         for k in ('hflip', 'image_denoise', 'vflip', 'video_denoise'):
-            val = get_config_option(self.config, 'camera', k, get='getboolean')
+            val = get_config_option(self.config, section, k, get='getboolean')
             if val is not None:
                 logger.debug('setting %s=%s', k, 'true' if val else 'false')
                 setattr(self.camera, k, val)
@@ -53,19 +50,19 @@ class Camera(object):
         # Ints
         for k in ('brightness', 'contrast', 'exposure_compensation', 'iso', 'rotation', 'saturation', 'sensor_mode',
                   'sharpness', 'shutter_speed'):
-            val = get_config_option(self.config, 'camera', k, get='getint')
+            val = get_config_option(self.config, section, k, get='getint')
             if val is not None:
                 logger.debug('setting %s=%d', k, val)
                 setattr(self.camera, k, val)
 
         # Strings
         for k in ('awb_mode', 'drc_strength', 'exposure_mode', 'meter_mode', 'resolution', 'still_stats'):
-            val = get_config_option(self.config, 'camera', k)
+            val = get_config_option(self.config, section, k)
             if val is not None:
                 logger.debug('setting %s=%s', k, val)
                 setattr(self.camera, k, val)
 
-        awb_gains = get_config_option(self.config, 'camera', 'awb_gains')
+        awb_gains = get_config_option(self.config, section, 'awb_gains')
         if awb_gains:
             awb_gains = awb_gains.split()
             if len(awb_gains) == 1:

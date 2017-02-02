@@ -3,6 +3,7 @@ from PIL import Image
 import threading
 import time
 import zwoasi
+from cameralogger import get_config_option
 
 
 __author__ = 'Steve Marple'
@@ -19,6 +20,11 @@ class Camera(object):
         self.config = config
         self.capture_image_lock = threading.Lock()
 
+    def __del__(self):
+        self.camera.stop_video_capture()
+        self.camera.close()
+
+    def apply_settings(self, section):
         # Initialise
         controls = self.camera.get_controls()
         self.camera.start_video_capture()
@@ -26,8 +32,8 @@ class Camera(object):
         # Read all camera controls defined in the config file
         for c in controls:
             cl = c.lower()
-            if self.config.has_option('camera', cl):
-                value = self.config.get('camera', cl)
+            value = get_config_option(self.config, section, cl)
+            if value is not None:
                 default_value = controls[c]['DefaultValue']
                 control_type = getattr(zwoasi, 'ASI_' + c.upper())
                 logger.debug('set control value %s to %s', cl, value)
@@ -37,15 +43,10 @@ class Camera(object):
                     # Cast value to same type as default_value
                     self.camera.set_control_value(control_type, type(default_value)(value), auto=False)
 
-        if self.config.has_option('camera', 'image_type'):
-            image_type = self.config.get('camera', 'image_type')
+        image_type = get_config_option(self.config, section, 'image_type')
+        if image_type is not None:
             logger.debug('set image type to %s', image_type)
             self.camera.set_image_type(getattr(zwoasi, 'ASI_IMG_' + image_type.upper()))
-        time.sleep(2)
-
-    def __del__(self):
-        self.camera.stop_video_capture()
-        self.camera.close()
 
     def capture_image(self, _):
         logger.debug('capture_image: acquiring lock')
