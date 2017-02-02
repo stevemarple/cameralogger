@@ -76,7 +76,7 @@ class Camera(object):
 
         if self.use_video_port:
             # Enable recording
-            self.camera.start_recording(NullStream(), format='rgb')
+            self.camera.start_recording(NullStream(), format='rgb', splitter_port=self.splitter_port)
 
     def capture_image(self, section):
         logger.debug('capture_image: acquiring lock')
