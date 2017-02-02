@@ -538,20 +538,31 @@ def get_schedule(config, forced_schedule=None):
                                                      get_config_option(config, x, 'sampling_interval') is not None)]
 
     for sec in sections:
+        # Compute solar elevation and make it available for output. Allow for location to be customised in each section
         lat = get_config_option(config, sec, 'latitude',
                                              fallback_section='common', default=0, get='getfloat')
         lon = get_config_option(config, sec, 'longitude',
                                               fallback_section='common', default=0, get='getfloat')
         info['SolarElevation'] = get_solar_elevation(lat, lon, t)
 
+        # Compare with solar elevation
         if config.has_option(sec, 'solar_elevation') \
             and not cmp_value_with_option(info['SolarElevation'], config, sec, 'solar_elevation',
                                           fallback_section='common'):
             continue
 
+        # Compare with AuroraWatch
         if config.has_option(sec, 'aurorawatchuk_status') \
             and not cmp_value_with_option(info['AuroraWatchUK'].status.level, config, sec, 'aurorawatchuk_status',
                                           fallback_section='common'):
+            continue
+
+        # Test file existence
+        if config.has_option(sec, 'file_exists') and not os.path.exists(config.get(sec, 'file_exists')):
+            continue
+
+        # Test file non-existence
+        if config.has_option(sec, 'file_not_exist') and os.path.exists(config.get(sec, 'file_not_exist')):
             continue
 
         # All tests passed
