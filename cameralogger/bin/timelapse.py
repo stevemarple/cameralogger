@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import os
 from PIL import Image
+import six
 import subprocess
 
 
@@ -40,7 +41,7 @@ def find_start_end_frames(st, et, step, filename_fstr):
 
 
 def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
-           resolution=None, duration=None, speed_up=None, ifr=None, ofr=None):
+           size=None, duration=None, speed_up=None, ifr=None, ofr=None):
     img_mode = 'RGB'  # Mode for all images
     # Remember et is inclusive
     st, et = find_start_end_frames(start_time.astype('datetime64[s]').astype(int),
@@ -72,17 +73,46 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
     first_frame = Image.open(filename_fstr.format(DateTime=datetime.datetime.fromtimestamp(st))).convert('RGB')
 
     # TODO: Add code to run tasks at start/end of time lapse, eg add text, dissolving to/from first/last frames
-    if resolution is None:
-        resolution = tuple(first_frame.size)
+
+    if not size:
+        size = tuple(first_frame.size)  # Force to be tuple so that img.size comparison works later
     else:
-        resolution = tuple(resolution)  # Force to be tuple so that img.size comparison works later
+        if isinstance(size, six.string_types):
+            if size[-1] == '%':
+                # Percentage, like 50%
+                ratio = float(size[:-1]) / 100
+                size = (int(round(first_frame.size[0] * ratio)), int(round(first_frame.size[1] * ratio)))
+            else:
+                # width x height, possibly with one missing
+                width, _, height = size.partition('x')
+                if width == '':
+                    if height == '':
+                        # Will not occur as long an empty strings caught previously
+                        raise ValueError('unknown size format (%s)' % size)
+                    else:
+                        height = int(height)
+                        width = int(round(first_frame.size[0] * height / float(first_frame.size[1])))
+                else:
+                    width = int(width)
+                    if height == '':
+                        height = int(round(first_frame.size[1] * width / float(first_frame.size[0])))
+                    else:
+                        height = int(height)
+                size = (width, height)
+        elif isinstance(size, float):
+            size = (int(round(first_frame.size[0] * size)), int(round(first_frame.size[1] * size)))
+        elif len(size) == 2:
+            # Assume iterable of numbers
+            size = tuple(map(int, size))
+        else:
+            raise ValueError('unknown size format (%s)' % size)
 
     # Set up a subprocess to run ffmpeg
     cmd = ('ffmpeg',
            '-loglevel', 'error',
            '-y',  # overwrite
            '-framerate', str(ifr),  # input frame rate
-           '-s', '%dx%d' % (resolution[0], resolution[1]),  # size of image
+           '-s', '%dx%d' % (size[0], size[1]),  # size of image
            '-pix_fmt', 'rgb24',  # format
            '-f', 'rawvideo',
            '-i', '-',  # read from stdin
@@ -102,16 +132,16 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
             img = Image.open(filename)
         elif img is None:
             logger.debug('missing %s', filename)
-            img = Image.new('RGB', resolution)
+            img = Image.new('RGB', size)
         else:
             logger.debug('missing intermediate image %s', filename)
 
         if img.mode != img_mode:
             logger.debug('converting image to mode %s', img_mode)
             img = img.convert(img_mode)
-        if tuple(img.size) != resolution:
+        if tuple(img.size) != size:
             logger.debug('resizing image')
-            img = img.resize(resolution, Image.BILINEAR)
+            img = img.resize(size, Image.BILINEAR)
 
         proc.stdin.write(img.tobytes())
         t += step
@@ -148,11 +178,8 @@ if __name__ == '__main__':
                         type=float,
                         help='Input frame rate',
                         metavar='FPS')
-    parser.add_argument('--resolution',
-                        nargs=2,
-                        type=int,
-                        help='Video resolution',
-                        metavar=('WIDTH', 'HEIGHT'))
+    parser.add_argument('--size',
+                        help='Video size (WxH or percentage')
     parser.add_argument('-s', '--start-time',
                         required=True,
                         help='Start time for time lapse')
@@ -194,5 +221,5 @@ if __name__ == '__main__':
 
     ffmpeg(start_time, end_time, args.step, args.fstr, args.output,
            ofr=args.output_frame_rate,
-           resolution=args.resolution,
+           size=args.size,
            **kwargs)
