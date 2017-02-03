@@ -11,7 +11,7 @@ import subprocess
 
 
 __author__ = 'Steve Marple'
-__version__ = '0.0.11'
+__version__ = '0.0.12'
 __license__ = 'MIT'
 
 
