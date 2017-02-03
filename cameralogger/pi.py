@@ -1,6 +1,6 @@
 from fractions import Fraction
 import logging
-from picamera import PiCamera
+from picamera import PiCamera, PiCameraNotRecording
 from picamera.array import PiRGBArray
 from PIL import Image
 import threading
@@ -20,24 +20,25 @@ class Camera(object):
         self.config = config
         self.capture_image_lock = threading.Lock()
         self.camera = PiCamera()
-        self.use_video_port = None
+        self.use_video_port = False
         self.splitter_port = None
 
     def __del__(self):
-        if self.camera.recording:
-            self.camera.stop_recording()
+        self.stop_recording()
         self.camera.close()
 
     def apply_settings(self, section):
-        if self.camera.recording:
-            self.camera.stop_recording()
+        # Stop any previous recordings
+        self.stop_recording()
 
         self.use_video_port = get_config_option(self.config, section, 'use_video_port', get='getboolean')
-        self.splitter_port = get_config_option(self.config, section, 'splitter_port', 0, get='getint')
+        if self.use_video_port:
+            self.splitter_port = get_config_option(self.config, section, 'splitter_port', 1, get='getint')
 
         # Fractions
-        framerate = get_config_option(self.config, section, 'framerate', '1/6')
-        if framerate:
+        framerate = get_config_option(self.config, section, 'framerate')
+        if framerate is not None:
+            logger.debug('setting framerate=%s', str(framerate))
             self.camera.framerate = fraction_or_float(framerate)
 
         # Booleans
@@ -73,7 +74,10 @@ class Camera(object):
 
         if self.use_video_port:
             # Enable recording
-            self.camera.start_recording(NullStream(), format='rgb', splitter_port=self.splitter_port)
+            try:
+                self.camera.start_recording(NullStream(), format='rgb', splitter_port=self.splitter_port)
+            finally:
+                self.stop_recording()
 
     def capture_image(self, section):
         logger.debug('capture_image: acquiring lock')
@@ -124,6 +128,19 @@ class Camera(object):
             logger.warning('could not read system temperature')
             logger.debug(traceback.format_exc())
         return r
+
+    def stop_recording(self):
+        # Stop any previous video recording. How to tell if this has to be done? It is not clear to
+        # which splitter port camera.recording refers.
+        if self.use_video_port:
+            try:
+                self.camera.stop_recording(self.splitter_port)
+            except PiCameraNotRecording:
+                pass
+            finally:
+                self.splitter_port = None
+                self.use_video_port = False
+
 
 
 class NullStream(object):
