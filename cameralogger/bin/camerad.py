@@ -34,7 +34,9 @@ def run_camera(forced_schedule):
 
     Camera = getattr(importlib.import_module('cameralogger.' + camera_type), 'Camera')
     camera = Camera(config)
-    camera.apply_settings('camera')
+    camera_settings = cameralogger.get_config_option(config, 'camera', 'settings')
+    if camera_settings:
+        camera.apply_settings(camera_settings)
 
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
