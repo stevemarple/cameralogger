@@ -98,7 +98,7 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
         dt = datetime.datetime.fromtimestamp(t)
         filename = filename_fstr.format(DateTime=dt)
         if os.path.exists(filename):
-            logger.debug('reading %s', filename)
+            logger.info('reading %s', filename)
             img = Image.open(filename)
         elif img is None:
             logger.debug('missing %s', filename)
