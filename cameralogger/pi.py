@@ -80,11 +80,11 @@ class Camera(object):
                 self.stop_recording()
 
     def capture_image(self, section):
+        t = time.time()
         logger.debug('capture_image: acquiring lock')
         if self.capture_image_lock.acquire(False):
             try:
                 logger.debug('capture_image: acquired lock')
-                t = time.time()
                 if self.use_video_port and not self.camera.frame.complete:
                     # With long exposures the camera has not started producing valid frames. Attempting to
                     # record now mean the thread hangs and prevents other captures later.
