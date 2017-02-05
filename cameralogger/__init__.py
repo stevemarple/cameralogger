@@ -21,7 +21,7 @@ import traceback
 
 from cameralogger.formatters import MyFormatter
 from cameralogger.formatters import LatLon
-from aurorawatchuk.snapshot import AuroraWatchUK as  AuroraWatchUK_SS
+from aurorawatchuk.snapshot import AuroraWatchUK_SS
 
 if sys.version_info[0] >= 3:
     # noinspection PyCompatibility
