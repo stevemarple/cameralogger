@@ -16,7 +16,19 @@ class Camera(object):
         num_cameras = zwoasi.get_num_cameras()
         if num_cameras == 0:
             raise Exception('no camera present')
-        self.camera = zwoasi.Camera(0)
+
+        if config.has_option('camera', 'model'):
+            id_ = config.get('camera', 'model')
+            try:
+                # Assume it is an integer
+                id_ = int(id_)
+            except ValueError:
+                # No it wasn't, must be the model name then
+                pass
+        else:
+            id_ = 0
+
+        self.camera = zwoasi.Camera(id_)
         self.config = config
         self.capture_image_lock = threading.Lock()
 
