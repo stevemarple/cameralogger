@@ -32,7 +32,7 @@ def run_camera(forced_schedule):
     camera_type = config.get('camera', 'type')
     logger.debug('camera type: %s', camera_type)
 
-    Camera = getattr(importlib.import_module('cameralogger.' + camera_type), 'Camera')
+    Camera = getattr(importlib.import_module('cameralogger.' + camera_type.lower()), 'Camera')
     camera = Camera(config)
     camera_settings = cameralogger.get_config_option(config, 'camera', 'settings')
     if camera_settings:
