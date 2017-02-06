@@ -13,6 +13,15 @@ __license__ = 'MIT'
 
 class Camera(object):
     def __init__(self, config):
+        if zwoasi.zwolib is None:
+            # Must initialise the library
+            if config.has_option('camera', 'sdk'):
+                sdk_filename = config.get('camera', 'sdk')
+            else:
+                # Hope the user has set LD_LIBRARY_PATH or similar..
+                sdk_filename = None
+            zwoasi.init(sdk_filename)
+
         num_cameras = zwoasi.get_num_cameras()
         if num_cameras == 0:
             raise Exception('no camera present')
