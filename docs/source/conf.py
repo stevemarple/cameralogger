@@ -21,7 +21,10 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
             return MagicMock()
 
-MOCK_MODULES = ['numpy', 'picamera', 'picamera.array', 'scipy']
+MOCK_MODULES = ['numpy', 'picamera', 'picamera.array',
+                'PIL', 'PIL.Image', 'PIL.ImageDraw', 'PIL.ImageFont',
+                'PIL.ImageOps', 
+                'scipy']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
