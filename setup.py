@@ -45,7 +45,8 @@ setup(
     author='Steve Marple',
     author_email='s.marple@lancaster.ac.uk',
     packages=find_packages(exclude=['tests*']),
-    install_requires=['astral', 'atomiccreate', 'numpy>=1.7', 'Pillow'],
+    install_requires=['astral', 'atomiccreate', 'aurorawatchuk',
+                      'numpy>=1.7', 'Pillow'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Education',
