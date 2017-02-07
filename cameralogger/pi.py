@@ -16,6 +16,10 @@ __license__ = 'MIT'
 
 
 class Camera(object):
+    """Raspberry Pi camera.
+
+    Uses the :class:`picamera.PiCamera` class."""
+
     def __init__(self, config):
         self.config = config
         self.capture_image_lock = threading.Lock()

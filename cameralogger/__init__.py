@@ -36,7 +36,9 @@ __license__ = 'MIT'
 
 
 class Tasks(object):
-    """A collection of tasks than can be performed to create, act upon and save image buffers."""
+    """A collection of tasks than can be performed to create, act upon and save image buffers.
+
+    Camera: a camera object such as :class:`.dummy.Camera`, :class:`.pi.Camera`, :class:`.zwo.Camera`"""
 
     def __init__(self, camera=None, config=None, schedule=None, schedule_info={}):
         self.camera = camera

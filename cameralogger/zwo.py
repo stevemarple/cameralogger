@@ -12,6 +12,8 @@ __license__ = 'MIT'
 
 
 class Camera(object):
+    """ZwO ASI camera."""
+
     def __init__(self, config):
         if zwoasi.zwolib is None:
             # Must initialise the library
