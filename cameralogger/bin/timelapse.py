@@ -41,15 +41,30 @@ def find_start_end_frames(st, et, step, filename_fstr):
 
 
 def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
-           size=None, duration=None, speed_up=None, ifr=None, ofr=None):
+           size=None, duration=None, speed_up=None, ifr=None, ofr=None, jitter=None):
+    def get_filename(t):
+        return filename_fstr.format(DateTime=datetime.datetime.fromtimestamp(t))
+
     img_mode = 'RGB'  # Mode for all images
     # Remember et is inclusive
-    st, et = find_start_end_frames(start_time.astype('datetime64[s]').astype(int),
-                                   end_time.astype('datetime64[s]').astype(int),
+    start_time_s = start_time.astype('datetime64[s]').astype(int)
+    end_time_s = end_time.astype('datetime64[s]').astype(int)
+    st, et = find_start_end_frames(start_time_s,
+                                   end_time_s,
                                    step,
                                    filename_fstr)
     if st is None:
         raise ValueError('could not find any images in time range')
+
+    if jitter:
+        if step <= jitter:
+            raise ValueError('step size must be more than 2 * jitter')
+        # Remove jitter effects from computed start/end times
+        if abs(start_time_s - st) <= jitter:
+            st = start_time_s
+        if abs(end_time_s - et) <= jitter:
+            et = end_time_s
+
 
     input_duration = et - st
     frames = input_duration / step  # Includes repeated frames
@@ -125,15 +140,28 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
     img = None
     t = st
     while t <= et:
-        dt = datetime.datetime.fromtimestamp(t)
-        filename = filename_fstr.format(DateTime=dt)
-        if os.path.exists(filename):
-            logger.info('reading %s', filename)
-            img = Image.open(filename)
+        found = False
+        tries = [t]
+        if jitter:
+            tries += list(range(t+1, t+jitter+1))  # Additional tries for late samples
+            # tries += list(range(t-1, t-jitter-1, -1))  # Additional tries for early samples
+        for t2 in tries:
+            filename = get_filename(t2)
+            if os.path.exists(filename):
+                found = True
+                logger.info('reading %s', filename)
+                img = Image.open(filename)
+                break
+
+        if found:
+            pass
         elif img is None:
             logger.debug('missing %s', filename)
             img = Image.new('RGB', size)
         else:
+            if jitter and logger.level <= logging.DEBUG:
+                # Log the target filename
+                filename = get_filename(t)
             logger.debug('missing intermediate image %s', filename)
 
         if img.mode != img_mode:
@@ -165,6 +193,11 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--fstr',
                         required=True,
                         help='Filenames format string')
+    parser.add_argument('-j', '--jitter',
+                        type=int,
+                        default=0,
+                        help='Accept jitter',
+                        metavar='SECONDS')
     parser.add_argument('--log-level',
                         choices=['debug', 'info', 'warning',
                                  'error', 'critical'],
@@ -185,7 +218,7 @@ if __name__ == '__main__':
                         help='Start time for time lapse')
     parser.add_argument('--step',
                         default=1,
-                        type=float,
+                        type=int,
                         help='Time step between images',
                         metavar='SECONDS')
 
@@ -222,4 +255,5 @@ if __name__ == '__main__':
     ffmpeg(start_time, end_time, args.step, args.fstr, args.output,
            ofr=args.output_frame_rate,
            size=args.size,
+           jitter=args.jitter,
            **kwargs)
