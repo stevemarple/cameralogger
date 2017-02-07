@@ -45,7 +45,7 @@ setup(
     author='Steve Marple',
     author_email='s.marple@lancaster.ac.uk',
     packages=find_packages(exclude=['tests*']),
-    install_requires=['atomiccreate', 'matplotlib', 'numpy>=1.7', 'Pillow', 'scipy'],
+    install_requires=['astral', 'atomiccreate', 'numpy>=1.7', 'Pillow'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Education',
