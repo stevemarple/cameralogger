@@ -276,4 +276,15 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'http://docs.python.org/': None}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/', None),
+    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
+    'cv2': ('http://docs.opencv.org/2.4/', None),
+    'h5py': ('http://docs.h5py.org/en/latest/', None),
+    'astral': ('https://pythonhosted.org/astral/', None),
+    'atomiccreate': ('http://atomiccreate.readthedocs.io/en/latest/', None),
+    'aurorawatchuk': ('http://aurorawatchuk.readthedocs.io/en/latest/', None),
+    'picamera': ('http://picamera.readthedocs.io/en/latest/', None),
+    'pillow': ('http://pillow.readthedocs.io/en/latest/', None),
+    'zwoasi': ('http://zwoasi.readthedocs.io/en/latest/', None),
+}

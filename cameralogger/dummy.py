@@ -15,7 +15,7 @@ class Camera(object):
     """Dummy camera.
 
     Dummy camera for testing. Does not use real hardware but 'captures' images by reading images files
-    from a directory."""
+    from a directory. Files are selected by :func:`glob.glob()`."""
 
     def __init__(self, config):
         self.config = config

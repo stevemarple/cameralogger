@@ -12,7 +12,9 @@ __license__ = 'MIT'
 
 
 class Camera(object):
-    """ZwO ASI camera."""
+    """ZwO ASI camera.
+
+    Uses the :class:`zwoasi.Camera` class."""
 
     def __init__(self, config):
         if zwoasi.zwolib is None:
