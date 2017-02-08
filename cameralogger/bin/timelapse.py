@@ -8,6 +8,7 @@ import os
 from PIL import Image
 import six
 import subprocess
+import time
 
 
 __author__ = 'Steve Marple'
@@ -45,6 +46,7 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
     def get_filename(t):
         return filename_fstr.format(DateTime=datetime.datetime.fromtimestamp(t))
 
+    processing_start_time = time.time()
     img_mode = 'RGB'  # Mode for all images
     # Remember et is inclusive
     start_time_s = start_time.astype('datetime64[s]').astype(int)
@@ -139,6 +141,10 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
 
     img = None
     t = st
+    stats = {'frames': 0,
+             'images': 0,
+             'time_taken': None}
+
     while t <= et:
         found = False
         tries = [t]
@@ -151,6 +157,7 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
                 found = True
                 logger.info('reading %s', filename)
                 img = Image.open(filename)
+                stats['images'] += 1
                 break
 
         if found:
@@ -172,9 +179,16 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
             img = img.resize(size, Image.BILINEAR)
 
         proc.stdin.write(img.tobytes())
+        stats['frames'] += 1
         t += step
     proc.communicate()
+    stats['time_taken'] = int(time.time() - processing_start_time)
+
     logger.info('saved to %s', output_filename)
+    stats['output_filename'] = output_filename
+    logger.info('used {stats[images]} images to construct {stats[frames]} frames in {stats[time_taken]} s'
+                .format(stats=stats))
+    return stats
 
 
 logger = logging.getLogger(__name__)
