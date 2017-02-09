@@ -46,7 +46,7 @@ else:
     from ConfigParser import RawConfigParser
 
 __author__ = 'Steve Marple'
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __license__ = 'MIT'
 
 
