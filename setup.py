@@ -41,7 +41,7 @@ setup(
     long_description=(read('README.rst') + '\n\n' +
                       read('AUTHORS.rst')),
     url='https://github.com/stevemarple/python-cameralogger',
-    license='PSF',
+    license='GPLv3+',
     author='Steve Marple',
     author_email='s.marple@lancaster.ac.uk',
     packages=find_packages(exclude=['tests*']),
@@ -52,7 +52,7 @@ setup(
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
         'Natural Language :: English',
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)'
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
