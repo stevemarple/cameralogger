@@ -546,7 +546,7 @@ def get_schedule(config, forced_schedule=None):
     t = time.time()
     info = {
         # TODO: Allow cache directory and baseurl to be overridden from config settings
-        'AuroraWatchUK': AuroraWatchUK_SS(),
+        'AuroraWatchUK': AuroraWatchUK_SS(preemptive=True),
     }
 
     if forced_schedule:
