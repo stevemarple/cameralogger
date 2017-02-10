@@ -558,9 +558,9 @@ def get_schedule(config, forced_schedule=None):
     for sec in sections:
         # Compute solar elevation and make it available for output. Allow for location to be customised in each section
         lat = get_config_option(config, sec, 'latitude',
-                                             fallback_section='common', default=0, get='getfloat')
+                                fallback_section='common', default=0, get='getfloat')
         lon = get_config_option(config, sec, 'longitude',
-                                              fallback_section='common', default=0, get='getfloat')
+                                fallback_section='common', default=0, get='getfloat')
         info['SolarElevation'] = get_solar_elevation(lat, lon, t)
 
         # Compare with solar elevation
