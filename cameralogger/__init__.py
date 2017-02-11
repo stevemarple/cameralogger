@@ -453,6 +453,12 @@ class CaptureTasks(ImageTasks):
         self.buffers[dst] = img
         print(repr(self.format_dict))
 
+class MovieTasks(ImageTasks):
+    def __init__(self, ffmpeg, *args, **kwargs):
+        ImageTasks.__init__(self, *args, **kwargs)
+        self.ffmpeg = ffmpeg
+
+
 def unescape_unicode(s):
     if sys.version_info[0] >= 3:
         return bytes(s, 'UTF-8').decode('unicode-escape')
