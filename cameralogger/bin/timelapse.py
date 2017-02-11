@@ -25,6 +25,7 @@ from PIL import Image
 import six
 import subprocess
 import time
+from cameralogger.ffmpeg import FFmpeg
 
 
 __author__ = 'Steve Marple'
@@ -57,8 +58,8 @@ def find_start_end_frames(st, et, step, filename_fstr):
     return r_st, r_et
 
 
-def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
-           size=None, duration=None, speed_up=None, ifr=None, ofr=None, jitter=None):
+def timelapse(start_time, end_time, step, filename_fstr, output_filename,
+              size=None, duration=None, speed_up=None, ifr=None, ofr=None, jitter=None):
     def get_filename(t):
         return filename_fstr.format(DateTime=datetime.datetime.fromtimestamp(t))
 
@@ -82,7 +83,6 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
             st = start_time_s
         if abs(end_time_s - et) <= jitter:
             et = end_time_s
-
 
     input_duration = et - st
     frames = input_duration / step  # Includes repeated frames
@@ -140,20 +140,7 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
         else:
             raise ValueError('unknown size format (%s)' % size)
 
-    # Set up a subprocess to run ffmpeg
-    cmd = ('ffmpeg',
-           '-loglevel', 'error',
-           '-y',  # overwrite
-           '-framerate', str(ifr),  # input frame rate
-           '-s', '%dx%d' % (size[0], size[1]),  # size of image
-           '-pix_fmt', 'rgb24',  # format
-           '-f', 'rawvideo',
-           '-i', '-',  # read from stdin
-           '-vcodec', 'libx264',  # set output encoding
-           '-r', str(ofr),  # output frame rate
-           output_filename)
-    logger.info('Running command ' + ' '.join(cmd))
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    ffmpeg = FFmpeg(output_filename, size, ifr, ofr)
 
     img = None
     t = st
@@ -194,10 +181,11 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
             logger.debug('resizing image')
             img = img.resize(size, Image.BILINEAR)
 
-        proc.stdin.write(img.tobytes())
+        ffmpeg.add_frame(img)
         stats['frames'] += 1
         t += step
-    proc.communicate()
+
+    ffmpeg.close()
     stats['time_taken'] = int(time.time() - processing_start_time)
 
     logger.info('saved to %s', output_filename)
@@ -208,6 +196,8 @@ def ffmpeg(start_time, end_time, step, filename_fstr, output_filename,
 
 
 logger = logging.getLogger(__name__)
+
+
 if __name__ == '__main__':
     default_config_file = os.path.join(os.path.sep, 'etc', 'camera.ini')
     parser = \
@@ -282,8 +272,8 @@ if __name__ == '__main__':
     else:
         kwargs['duration'] = args.duration
 
-    ffmpeg(start_time, end_time, args.step, args.fstr, args.output,
-           ofr=args.output_frame_rate,
-           size=args.size,
-           jitter=args.jitter,
-           **kwargs)
+    timelapse(start_time, end_time, args.step, args.fstr, args.output,
+              ofr=args.output_frame_rate,
+              size=args.size,
+              jitter=args.jitter,
+              **kwargs)
