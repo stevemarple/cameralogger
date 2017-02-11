@@ -36,6 +36,8 @@
 
 
 import logging
+import numpy as np
+from PIL import Image
 import subprocess
 
 
@@ -47,12 +49,13 @@ __license__ = 'MIT'
 class FFmpeg(object):
     def __init__(self, filename, size, ifr, ofr,
                  vcodec='libx264',
-                 loglevel='error'):
+                 loglevel='error',
+                 bg_color='black'):
         self.filename = filename
         self.ifr = ifr
         self.ofr = ofr
         self.vcodec = vcodec
-        self.size = size
+        self.size = tuple(size)
         self.loglevel = loglevel
 
         # Set up a subprocess to run ffmpeg
@@ -69,6 +72,8 @@ class FFmpeg(object):
                self.filename)
         logger.debug('Running command ' + ' '.join(cmd))
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        self.background = None
+        self.set_bg_color(bg_color)
 
     def __del__(self):
         self.close()
@@ -78,12 +83,54 @@ class FFmpeg(object):
             self.proc.communicate()
             self.proc = None
 
+    def set_bg_color(self, color):
+        if color is None:
+            self.background = None
+        else:
+            self.background = Image.new('RGBA', self.size, color)
+
     def add_frame(self, image):
+        if image.size != self.size:
+            raise ValueError('Image is incorrect size (%s)' % repr(image.size))
+        if image.mode != 'RGB':
+            if 'A' in image.getbands() and self.background:
+                # Must alpha composite over background color
+                image = Image.alpha_composite(self.background, image)
+
+            image = image.convert('RGB')
         self.proc.stdin.write(image.tobytes())
+
+    def dissolve(self, image1, image2, num_frames):
+        for alpha in my_linspace(0, 1, num_frames):
+            self.add_frame(Image.blend(image1, image2, alpha))
+
+    def fade_in(self, image, num_frames):
+        im2 = image.copy()
+        for alpha in my_linspace(0, 1, num_frames):
+            im2.putalpha(int(round(alpha * 255)))
+            self.add_frame(im2)
+
+    def fade_out(self, image, num_frames):
+        im2 = image.copy()
+        for alpha in my_linspace(1, 0, num_frames):
+            im2.putalpha(int(round(alpha * 255)))
+            self.add_frame(im2)
+
+    def freeze(self, image, num_frames):
+        """Show image as freeze-frame for given duration."""
+        for n in range(num_frames):
+            self.add_frame(image)
 
     @property
     def closed(self):
         return self.proc is None
+
+
+def my_linspace(a, b, n):
+    if n == 1:
+        return (a + b) / 2.0  # numpy.linspace() doesn't interpolate
+    else:
+        return list(np.linspace(a, b, n))
 
 
 logger = logging.getLogger(__name__)
