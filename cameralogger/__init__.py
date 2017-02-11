@@ -50,19 +50,20 @@ __version__ = '0.1.1'
 __license__ = 'MIT'
 
 
-class Tasks(object):
+class ImageTasks(object):
     """A collection of tasks than can be performed to create, act upon and save image buffers.
 
     Camera: a camera object such as :class:`.dummy.Camera`, :class:`.pi.Camera`, :class:`.zwo.Camera`"""
 
-    def __init__(self, camera=None, config=None, schedule=None, schedule_info={}):
-        self.camera = camera
+    # def __init__(self, camera=None, config=None, schedule=None, schedule_info={}):
+    def __init__(self, config=None, schedule=None, schedule_info={}):
+        # self.camera = camera
         self.config = config
         self.schedule = schedule
         self.schedule_info = schedule_info
         self.buffers = {}
-        self.time = None
-        self.capture_info = None
+        # self.time = None
+        # self.capture_info = None
         self.format_dict = None
 
     def _get_color(self, section, default=None, fallback_section=None, get=None, raise_=True, option='color'):
@@ -109,18 +110,13 @@ class Tasks(object):
         if self.format_dict is not None:
             return self.format_dict
 
-        d = {}
-        if self.capture_info is not None:
-            # Copy all exposure settings
-            d = self.capture_info.copy()
-            # Remove subsecond part from time (datetime %S does not work as expected)
-            d['DateTime'] = datetime.datetime.utcfromtimestamp(int(self.time))
-        d['Schedule'] = self.schedule
-        d['Section'] = section
         lat = self._get_option(section, 'latitude', fallback_section='common', get='getfloat')
         lon = self._get_option(section, 'longitude', fallback_section='common', get='getfloat')
         lat_lon = LatLon(lat, lon)
-        d['LatLon'] = lat_lon
+        d = {'Schedule': self.schedule,
+             'Section': section,
+             'LatLon': lat_lon,
+             }
 
         for k, v in six.iteritems(self.schedule_info):
             d[k] = v
@@ -206,14 +202,6 @@ class Tasks(object):
         dst = self._get_option(section, 'dst', src1)
         alpha = self._get_option(section, 'alpha', get='getfloat')
         self.buffers[dst] = Image.blend(self.buffers[src1], self.buffers[src2], alpha)
-
-    def capture(self, section):
-        dst = self._get_option(section, 'dst')
-        img, info, t = self.camera.capture_image(section)
-        if self.time is None:
-            self.time = t  # Record time of first capture
-            self.capture_info = info
-        self.buffers[dst] = img
 
     def colorize(self, section):
         src = self._get_option(section, 'src')
@@ -445,6 +433,26 @@ class Tasks(object):
         self.buffers[dst] = self.buffers[src].tranpose(method)
 
 
+class CaptureTasks(ImageTasks):
+    def __init__(self, camera, *args, **kwargs):
+        ImageTasks.__init__(self, *args, **kwargs)
+        self.camera = camera
+        self.time = None  # capture time
+
+    def capture(self, section):
+        dst = self._get_option(section, 'dst')
+        img, info, t = self.camera.capture_image(section)
+        if self.time is None:
+            self.time = t  # Record time of first capture
+            self._make_dict(section)
+            # Save all capture information
+            for k,v in six.iteritems(info):
+                if v not in self.format_dict:
+                    self.format_dict[k] = v
+            self.format_dict['DateTime'] = datetime.datetime.utcfromtimestamp(int(t))
+        self.buffers[dst] = img
+        print(repr(self.format_dict))
+
 def unescape_unicode(s):
     if sys.version_info[0] >= 3:
         return bytes(s, 'UTF-8').decode('unicode-escape')
@@ -606,7 +614,7 @@ def get_solar_elevation(latitude, longitude, t):
 def process_tasks(camera, config, schedule, schedule_info):
     task_list = get_config_option(config, schedule, 'tasks', fallback_section='common', default='')
     logger.debug('tasks: ' + repr(task_list))
-    tasks = Tasks(camera, config, schedule, schedule_info)
+    tasks = CaptureTasks(camera, config, schedule, schedule_info)
     tasks.run_tasks(task_list.split())
     return
 
