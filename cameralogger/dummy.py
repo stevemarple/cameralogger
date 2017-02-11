@@ -57,7 +57,6 @@ class Camera(object):
                 img_info = dict(Exposure_s=1.0,
                                 Gain=1,
                                 Aperture=2.0,
-                                DateTime=time.strftime('%Y-%m-%d %H:%M:%S+00:00', time.gmtime(t)),
                                 SensorTemperature=25.0,
                                 SystemTemperature=float('NaN'))
 
