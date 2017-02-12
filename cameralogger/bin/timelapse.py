@@ -27,7 +27,7 @@ from cameralogger.ffmpeg import FFmpeg
 
 
 __author__ = 'Steve Marple'
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 __license__ = 'MIT'
 
 
