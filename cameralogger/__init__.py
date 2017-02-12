@@ -172,6 +172,12 @@ class ImageTasks(object):
             self.buffers[dst] = self.buffers[src].copy()
         draw = ImageDraw.Draw(self.buffers[dst])
         if hasattr(draw, 'multiline_text'):
+            if align == 'center':
+                sz = draw.multiline_textsize(text, font=font, spacing=spacing)
+                position[0] -= sz[0] / 2
+            elif align == 'right':
+                sz = draw.multiline_textsize(text, font=font, spacing=spacing)
+                position[0] -= sz[0]
             draw.multiline_text(position, text, color, font=font, spacing=spacing, align=align)
         else:
             # Compatibility, but without align
