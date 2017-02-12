@@ -14,9 +14,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 import astral
 from atomiccreate import atomic_symlink
 from atomiccreate import smart_open
+import cameralogger.ffmpeg
+import cameralogger.utils
 import datetime
 from fractions import Fraction
 import logging
@@ -54,13 +57,14 @@ class ImageTasks(object):
     """A collection of tasks than can be performed to create, act upon and save image buffers.
 
     Camera: a camera object such as :class:`.dummy.Camera`, :class:`.pi.Camera`, :class:`.zwo.Camera`"""
-
-    # def __init__(self, camera=None, config=None, schedule=None, schedule_info={}):
-    def __init__(self, config=None, schedule=None, schedule_info={}):
+    def __init__(self, config=None, schedule=None, schedule_info=None):
         # self.camera = camera
         self.config = config
         self.schedule = schedule
-        self.schedule_info = schedule_info
+        if schedule_info is None:
+            self.schedule_info = {}
+        else:
+            self.schedule_info = schedule_info
         self.buffers = {}
         # self.time = None
         # self.capture_info = None
@@ -69,7 +73,7 @@ class ImageTasks(object):
     def _get_color(self, section, default=None, fallback_section=None, get=None, raise_=True, option='color'):
         color = self._get_option(section, option, default=default, fallback_section=fallback_section, get=get,
                                  raise_=raise_)
-        if re.match('^[0-9a-f]{3,6}$', color, re.IGNORECASE):
+        if isinstance(color, six.string_types) and re.match('^[0-9a-f]{3,6}$', color, re.IGNORECASE):
             return '#' + color
         else:
             return color
@@ -107,20 +111,12 @@ class ImageTasks(object):
             return map(int, size.split())
 
     def _make_dict(self, section):
-        if self.format_dict is not None:
-            return self.format_dict
-
-        lat = self._get_option(section, 'latitude', fallback_section='common', get='getfloat')
-        lon = self._get_option(section, 'longitude', fallback_section='common', get='getfloat')
-        lat_lon = LatLon(lat, lon)
-        d = {'Schedule': self.schedule,
-             'Section': section,
-             'LatLon': lat_lon,
-             }
-
-        for k, v in six.iteritems(self.schedule_info):
-            d[k] = v
-        self.format_dict = d
+        if self.format_dict is None:
+            self.format_dict = {'Schedule': self.schedule,
+                                'Section': section,
+                                }
+            for k, v in six.iteritems(self.schedule_info):
+                self.format_dict[k] = v
         return self.format_dict
 
     def format_str(self, section, s):
@@ -188,6 +184,12 @@ class ImageTasks(object):
         src2 = self._get_option(section, 'src2')
         dst = self._get_option(section, 'dst', src1)
         self.buffers[dst] = Image.alpha_composite(self.buffers[src1], self.buffers[src2])
+
+    def apply_alpha(self, section):
+        src = self._get_option(section, 'src')
+        dst = self._get_option(section, 'dst', src)
+        alpha = self._get_option(section, 'alpha', get='getfloat')
+        self.buffers[dst] = cameralogger.utils.apply_alpha(self.buffers[src], alpha)
 
     def autocontrast(self, section):
         src = self._get_option(section, 'src')
@@ -342,7 +344,10 @@ class ImageTasks(object):
         mode = self._get_option(section, 'mode')
         size = self._get_size(section)
         color = self._get_color(section, default=0)
+        alpha = self._get_option(section, 'alpha', None, get='getfloat', raise_=False)
         self.buffers[dst] = Image.new(mode, size, color)
+        if alpha is not None:
+            self.buffers[dst].putalpha(int(round(alpha * 255)))
 
     def paste(self, section):
         src1 = self._get_option(section, 'src1')
@@ -410,7 +415,8 @@ class ImageTasks(object):
         src_filename = self.format_str(section, self._get_option(section, 'src_filename'))
         dst_filename = self.format_str(section, self._get_option(section, 'dst_filename'))
         raise_ = self._get_option(section, 'raise', True, fallback_section='common', get='getboolean')
-        tempfile = self._get_option(section, 'tempfile', False, fallback_section='common', get='getboolean', raise_=False)
+        tempfile = self._get_option(section, 'tempfile', False, fallback_section='common', get='getboolean',
+                                    raise_=False)
         try:
             if tempfile:
                 atomic_symlink(src_filename, dst_filename)
@@ -439,6 +445,16 @@ class CaptureTasks(ImageTasks):
         self.camera = camera
         self.time = None  # capture time
 
+    def _make_dict(self, section):
+        if self.format_dict is None:
+            ImageTasks._make_dict(self, section)
+
+            lat = self._get_option(section, 'latitude', 0.0, fallback_section='common', get='getfloat')
+            lon = self._get_option(section, 'longitude', 0.0, fallback_section='common', get='getfloat')
+            lat_lon = LatLon(lat, lon)
+            self.format_dict['LatLon'] = lat_lon
+        return self.format_dict
+
     def capture(self, section):
         dst = self._get_option(section, 'dst')
         img, info, t = self.camera.capture_image(section)
@@ -446,17 +462,68 @@ class CaptureTasks(ImageTasks):
             self.time = t  # Record time of first capture
             self._make_dict(section)
             # Save all capture information
-            for k,v in six.iteritems(info):
+            for k, v in six.iteritems(info):
                 if v not in self.format_dict:
                     self.format_dict[k] = v
             self.format_dict['DateTime'] = datetime.datetime.utcfromtimestamp(int(t))
         self.buffers[dst] = img
-        print(repr(self.format_dict))
+
 
 class MovieTasks(ImageTasks):
     def __init__(self, ffmpeg, *args, **kwargs):
         ImageTasks.__init__(self, *args, **kwargs)
         self.ffmpeg = ffmpeg
+
+    def _get_num_frames(self, section, option='duration', default=None):
+        duration = self._get_option(section, option, default=default, get='getfloat')
+        return int(round(self.ffmpeg.ifr * duration))
+
+    def dissolve(self, section):
+        """Dissolve from first image to second over time."""
+        self.ffmpeg.dissolve(self.buffers[self._get_option(section, 'src1')],
+                             self.buffers[self._get_option(section, 'src2')],
+                             self._get_num_frames(section))
+
+    def fade_in(self, section):
+        self.ffmpeg.fade_in(self.buffers[self._get_option(section, 'src')],
+                            self._get_num_frames(section))
+
+    def fade_out(self, section):
+        self.ffmpeg.fade_out(self.buffers[self._get_option(section, 'src')],
+                             self._get_num_frames(section))
+
+    def freeze(self, section):
+        """Show image as freeze-frame for given duration."""
+        self.ffmpeg.freeze(self.buffers[self._get_option(section, 'src')],
+                           self._get_num_frames(section))
+
+    def set_background(self, section):
+        """Set the background used by FFmpeg."""
+        if self.config.has_option(section, 'src'):
+            bg = self.buffers[self._get_option(section, 'src')]  # Use image
+        elif self.config.has_option(section, 'color'):
+            bg = self.config.get(section, 'color')
+        else:
+            raise Exception('set_background requires src or color to be set in section %s' % section)
+        self.ffmpeg.set_background(bg)
+
+    def timelapse(self, section):
+        """Insert a timelapse section."""
+        filename = self._get_option(section, 'filename')
+        step = self._get_option(section, 'step', get='getint')
+        jitter = self._get_option(section, 'jitter', 0, get='getint')
+        fade_in = self._get_num_frames(section, 'fade_in', 0)
+        fade_out = self._get_num_frames(section, 'fade_out', 0)
+        f1, f2 = cameralogger.ffmpeg.timelapse(self.ffmpeg,
+                                               self.schedule_info['StartTime'],
+                                               self.schedule_info['EndTime'],
+                                               step, filename, jitter=jitter, fade_in=fade_in, fade_out=fade_out)
+        dst1 = self._get_option(section, 'dst1', raise_=False)
+        dst2 = self._get_option(section, 'dst2', raise_=False)
+        if dst1:
+            self.buffers[dst1] = f1
+        if dst2:
+            self.buffers[dst2] = f2
 
 
 def unescape_unicode(s):
@@ -464,6 +531,7 @@ def unescape_unicode(s):
         return bytes(s, 'UTF-8').decode('unicode-escape')
     else:
         return s.decode('unicode-escape')
+
 
 def read_config_file(filename):
     """Read config file."""
