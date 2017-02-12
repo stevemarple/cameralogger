@@ -165,7 +165,7 @@ class ImageTasks(object):
         color = self._get_color(section, fallback_section='common')
         unicode = self._get_option(section, 'unicode', False, fallback_section='common', get='getboolean')
         spacing = self._get_option(section, 'spacing', fallback_section='common', get='getint')
-        align = self._get_option(section, 'spacing', 'left', fallback_section='common')
+        align = self._get_option(section, 'align', 'left', fallback_section='common')
         position = list(map(int, self._get_option(section, 'position').split()))
         font = ImageFont.truetype(font_name, font_size)
         if unicode:
