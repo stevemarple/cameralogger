@@ -664,11 +664,11 @@ def get_schedule(config, forced_schedule=None):
             continue
 
         # Test file existence
-        if config.has_option(sec, 'file_exists') and not os.path.exists(config.get(sec, 'file_exists')):
+        if config.has_option(sec, 'file_exists') and not test_for_semaphore_file(config.get(sec, 'file_exists')):
             continue
 
         # Test file non-existence
-        if config.has_option(sec, 'file_not_exist') and os.path.exists(config.get(sec, 'file_not_exist')):
+        if config.has_option(sec, 'file_not_exist') and test_for_semaphore_file(config.get(sec, 'file_not_exist')):
             continue
 
         # All tests passed
@@ -683,6 +683,27 @@ def get_schedule(config, forced_schedule=None):
 def get_solar_elevation(latitude, longitude, t):
     loc = astral.Location(('', '', latitude, longitude, 'UTC', 0))
     return loc.solar_elevation(datetime.datetime.utcfromtimestamp(t))
+
+
+def test_for_semaphore_file(path):
+    """Test if semaphore file exists.
+
+    If `path` is a file and it exists then returns ``True``. If `path` is a symbolic link `True` is returned if the
+    link's target exists, otherwise returns ``False``.
+
+    If `path` is a directory it is searched recursively, returning ``True`` if a file or non-dangling symlink is
+    encountered. If the recursive search is exhausted without locating a file or non-dangling symlink ``False`` is
+    returned."""
+    if not os.path.exists(path):
+        # This deliberately includes dangling symlinks
+        return False
+    elif os.path.isdir(path):
+        for f in os.listdir(path):
+            if test_for_semaphore_file(os.path.join(path, f)):
+                return True
+        return False
+    else:
+        return True
 
 
 # Each sampling action is made by a new thread. This function uses a
