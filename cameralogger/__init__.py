@@ -133,6 +133,9 @@ class ImageTasks(object):
             getattr(self, act)(section)
 
     # Tasks are below
+    def task_group(self, section):
+        self.run_tasks(self._get_option(section, 'tasks').split())
+
     def add_text(self, section):
         src = self._get_option(section, 'src')
         dst = self._get_option(section, 'dst', src)
