@@ -144,7 +144,7 @@ class Camera(object):
                 r['SystemTemperature'] = float(f.read().strip()) / 1000
         except (KeyboardInterrupt, SystemExit):
             raise
-        except Exception:
+        except IOError:
             logger.warning('could not read system temperature')
             logger.debug(traceback.format_exc())
         return r
