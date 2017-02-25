@@ -53,7 +53,7 @@ class Camera(object):
 
         self.use_video_port = get_config_option(self.config, section, 'use_video_port', get='getboolean')
         if self.use_video_port:
-            self.splitter_port = get_config_option(self.config, section, 'splitter_port', 1, get='getint')
+            self.splitter_port = get_config_option(self.config, section, 'splitter_port', 0, get='getint')
 
         # Fractions
         framerate = get_config_option(self.config, section, 'framerate')
@@ -93,11 +93,7 @@ class Camera(object):
                 self.camera.awb_gains = (fraction_or_float(awb_gains[0]), fraction_or_float(awb_gains[1]))
 
         if self.use_video_port:
-            # Enable recording
-            try:
-                self.camera.start_recording(NullStream(), format='rgb', splitter_port=self.splitter_port)
-            finally:
-                self.stop_recording()
+            self.camera.start_recording(NullStream(), format='rgb', splitter_port=self.splitter_port+1)
 
     def capture_image(self, section):
         t = time.time()
@@ -105,6 +101,7 @@ class Camera(object):
         if self.capture_image_lock.acquire(False):
             try:
                 logger.debug('capture_image: acquired lock')
+                logger.debug('use_video_port=%s', repr(self.use_video_port))
                 if self.use_video_port and not self.camera.frame.complete:
                     # With long exposures the camera has not started producing valid frames. Attempting to
                     # record now mean the thread hangs and prevents other captures later.
@@ -152,15 +149,13 @@ class Camera(object):
     def stop_recording(self):
         # Stop any previous video recording. How to tell if this has to be done? It is not clear to
         # which splitter port camera.recording refers.
-        if self.use_video_port:
+        if self.use_video_port and self.splitter_port is not None:
             try:
-                self.camera.stop_recording(self.splitter_port)
+                self.camera.stop_recording(self.splitter_port+1)
             except PiCameraNotRecording:
                 pass
             finally:
                 self.splitter_port = None
-                self.use_video_port = False
-
 
 
 class NullStream(object):
