@@ -118,7 +118,7 @@ class Camera(object):
                                     use_video_port=self.use_video_port,
                                     splitter_port=self.splitter_port)
                 img = Image.fromarray(data.array)
-                img_info = self.get_image_settings(t)
+                img_info = self.get_image_settings()
 
                 return img, img_info, t
 
@@ -129,7 +129,7 @@ class Camera(object):
             logger.warning('capture_image: could not acquire lock')
             raise Exception('could not acquire lock')
 
-    def get_image_settings(self, t):
+    def get_image_settings(self):
         r = {'Exposure_s': self.camera.exposure_speed / 1000000.0,
              'ExposureMode': self.camera.exposure_mode,
              'SystemTemperature': float('NaN'),
