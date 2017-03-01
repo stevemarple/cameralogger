@@ -636,7 +636,7 @@ def get_schedule(config, forced_schedule=None):
 
     t = time.time()
     info = {
-        'AuroraWatchUK': AuroraWatchUK_SS(preemptive=True,
+        'AuroraWatchUK': AuroraWatchUK_SS(preemptive=True, raise_=False,
                                           base_url=get_config_option(config, 'aurorawatchuk', 'base_url')),
     }
 
