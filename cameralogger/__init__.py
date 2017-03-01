@@ -662,7 +662,7 @@ def get_schedule(config, forced_schedule=None):
 
         # Compare with AuroraWatch
         if config.has_option(sec, 'aurorawatchuk_status') \
-            and not cmp_value_with_option(info['AuroraWatchUK'].status.level, config, sec, 'aurorawatchuk_status',
+            and not cmp_value_with_option(info['AuroraWatchUK'].status_level, config, sec, 'aurorawatchuk_status',
                                           fallback_section='common'):
             continue
 
