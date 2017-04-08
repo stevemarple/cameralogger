@@ -81,7 +81,6 @@ if __name__ == '__main__':
                            help='Set output duration for timelapse',
                            metavar='SECONDS')
     ifr_group.add_argument('-i', '--input-frame-rate',
-                           type=float,
                            help='Input frame rate',
                            metavar='FPS')
     ifr_group.add_argument('--speed-up',
@@ -96,26 +95,29 @@ if __name__ == '__main__':
     start_time = np.datetime64(args.start_time, 's')
     end_time = np.datetime64(args.end_time, 's')
 
-    kwargs = {}
+    ifr = ofr = speed_up = duration = None
     if args.input_frame_rate is not None:
-        kwargs['ifr'] = args.input_frame_rate
-    elif args.speed_up is not None:
-        kwargs['speed_up'] = args.speed_up
+        ifr = Fraction(args.input_frame_rate)
+    if args.speed_up is not None:
+        speed_up = args.speed_up
+    if args.duration is not None:
+        duration = args.duration
+
+    if args.output_frame_rate:
+        ofr = Fraction(args.output_frame_rate)
     else:
-        kwargs['duration'] = args.duration
+        ofr = Fraction(60, 1)
 
     config = read_config_file(args.config_file)
-    size = [960, 720]
-    ifr = 60
-    ofr = Fraction(60, 1)
-    ffmpeg = FFmpeg(args.output, size, ifr, ofr)
-
+    schedule = 'movie'
     schedule_info = {
         'StartTime': np.datetime64(args.start_time, 's').astype(datetime.datetime),
         'EndTime': np.datetime64(args.end_time, 's').astype(datetime.datetime),
         'Step': args.step,
     }
+    size = map(int, config.get(schedule, 'size').split())
+    ffmpeg = FFmpeg(args.output, size, ifr, ofr)
 
-    tasks = MovieTasks(ffmpeg, config, 'movie', schedule_info)
+    tasks = MovieTasks(ffmpeg, config, schedule, schedule_info)
     task_list = get_config_option(config, 'movie', 'tasks', default='')
     tasks.run_tasks(task_list.split())
