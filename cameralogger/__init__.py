@@ -518,20 +518,29 @@ class MovieTasks(ImageTasks):
 
     def timelapse(self, section):
         """Insert a timelapse section."""
+
+        def do_frame_tasks(img, tasks):
+            """Run a set of tasks on every timelapse frame."""
+            self.buffers['frame'] = img
+            self.run_tasks(tasks)
+            return self.buffers['frame']
+
         filename = self._get_option(section, 'filename')
         step = self._get_option(section, 'step', get='getint')
         jitter = self._get_option(section, 'jitter', 0, get='getint')
-        mask_buffer = self._get_option(section, 'mask')
-        if mask_buffer:
-            mask = self.buffers[mask_buffer]
+        frame_tasks = self._get_option(section, 'frame_tasks', raise_=False)
+        if frame_tasks:
+            frame_cb = lambda(img): do_frame_tasks(img, frame_tasks.split())
         else:
-            mask = None
+            frame_cb = None
+
         fade_in = self._get_num_frames(section, 'fade_in', 0)
         fade_out = self._get_num_frames(section, 'fade_out', 0)
         f1, f2 = cameralogger.ffmpeg.timelapse(self.ffmpeg,
                                                self.schedule_info['StartTime'],
                                                self.schedule_info['EndTime'],
-                                               step, filename, jitter=jitter, mask=mask, fade_in=fade_in, fade_out=fade_out)
+                                               step, filename,
+                                               jitter=jitter, frame_cb=frame_cb,fade_in=fade_in, fade_out=fade_out)
         dst1 = self._get_option(section, 'dst1', raise_=False)
         dst2 = self._get_option(section, 'dst2', raise_=False)
         if dst1:
