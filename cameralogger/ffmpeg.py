@@ -154,7 +154,7 @@ def my_linspace(a, b, n):
         return list(np.linspace(a, b, n))
 
 
-def timelapse(ffmpeg, start_time, end_time, step, filename_fstr, jitter=None, fade_in=0, fade_out=0):
+def timelapse(ffmpeg, start_time, end_time, step, filename_fstr, jitter=None, mask=None, fade_in=0, fade_out=0):
     def get_filename(t):
         return filename_fstr.format(DateTime=datetime.datetime.fromtimestamp(t))
 
@@ -174,6 +174,8 @@ def timelapse(ffmpeg, start_time, end_time, step, filename_fstr, jitter=None, fa
     fade_out_alpha = my_linspace(1, 0, fade_out)
     total_frames = int((et-st) / step)
     fade_out_start = total_frames - fade_out
+    if mask:
+        mask2 = mask.convert('RGBA')
 
     while t < et:
         found = False
@@ -202,12 +204,17 @@ def timelapse(ffmpeg, start_time, end_time, step, filename_fstr, jitter=None, fa
                 filename = get_filename(t)
             logger.debug('missing intermediate image %s', filename)
 
-        if img.mode != img_mode:
-            logger.debug('converting image to mode %s', img_mode)
-            img = img.convert(img_mode)
+
         if tuple(img.size) != ffmpeg.size:
             logger.debug('resizing image')
             img = img.resize(ffmpeg.size, Image.BILINEAR)
+
+        if mask is not None:
+            img = Image.alpha_composite(img.convert('RGBA'), mask2)
+
+        if img.mode != img_mode:
+            logger.debug('converting image to mode %s', img_mode)
+            img = img.convert(img_mode)
 
         if len(fade_in_alpha):
             img = apply_alpha(img, fade_in_alpha.pop(0))

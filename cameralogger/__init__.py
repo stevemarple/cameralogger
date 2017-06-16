@@ -521,12 +521,17 @@ class MovieTasks(ImageTasks):
         filename = self._get_option(section, 'filename')
         step = self._get_option(section, 'step', get='getint')
         jitter = self._get_option(section, 'jitter', 0, get='getint')
+        mask_buffer = self._get_option(section, 'mask')
+        if mask_buffer:
+            mask = self.buffers[mask_buffer]
+        else:
+            mask = None
         fade_in = self._get_num_frames(section, 'fade_in', 0)
         fade_out = self._get_num_frames(section, 'fade_out', 0)
         f1, f2 = cameralogger.ffmpeg.timelapse(self.ffmpeg,
                                                self.schedule_info['StartTime'],
                                                self.schedule_info['EndTime'],
-                                               step, filename, jitter=jitter, fade_in=fade_in, fade_out=fade_out)
+                                               step, filename, jitter=jitter, mask=mask, fade_in=fade_in, fade_out=fade_out)
         dst1 = self._get_option(section, 'dst1', raise_=False)
         dst2 = self._get_option(section, 'dst2', raise_=False)
         if dst1:
