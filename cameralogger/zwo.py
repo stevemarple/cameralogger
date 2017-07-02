@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from atomiccreate import smart_open
 import logging
 from PIL import Image
 import threading
@@ -104,6 +105,14 @@ class Camera(object):
                 img_info['SystemTemperature'] = float('NaN')
                 with open('/sys/class/thermal/thermal_zone0/temp') as f:
                     img_info['SystemTemperature'] = float(f.read().strip()) / 1000
+
+                if self.config.has_option('camera', 'sensor_temperature_file'):
+                    with smart_open(self.config.get('camera', 'sensor_temperature_file'), 'w') as fh:
+                        if 'SensorTemperature' in img_info:
+                            fh.write(str(img_info['SensorTemperture']))
+                            fh.write('\n')
+                        else:
+                            fh.write('NaN\n')
                 return img, img_info, t
 
             finally:
