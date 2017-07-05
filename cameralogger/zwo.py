@@ -109,7 +109,7 @@ class Camera(object):
                 if self.config.has_option('camera', 'sensor_temperature_file'):
                     with smart_open(self.config.get('camera', 'sensor_temperature_file'), 'w') as fh:
                         if 'SensorTemperature' in img_info:
-                            fh.write(str(img_info['SensorTemperture']))
+                            fh.write(str(img_info['SensorTemperature']))
                             fh.write('\n')
                         else:
                             fh.write('NaN\n')
