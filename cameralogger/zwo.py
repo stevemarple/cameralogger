@@ -23,10 +23,28 @@ import time
 import zwoasi
 from cameralogger import get_config_option
 
-
 __author__ = 'Steve Marple'
 __version__ = '0.2.0'
 __license__ = 'MIT'
+
+_settings_map = {
+    'auto_exp_max_brightness': ('AutoExpMaxBrightness', 'ASI_AUTO_MAX_BRIGHTNESS'),
+    'auto_exp_max_exp': ('AutoExpMaxExp', 'ASI_AUTO_MAX_EXP'),
+    'auto_exp_max_exp_us': ('AutoExpMaxExpMS', 'ASI_AUTO_MAX_EXP_MS'),  # microsecond
+    'auto_exp_max_gain': ('AutoExpMaxGain', 'ASI_AUTO_MAX_GAIN'),
+    'bandwidth': ('BandWidth', 'ASI_BANDWIDTHOVERLOAD'),
+    'brightness': ('Brightness', 'ASI_BRIGHTNESS'),
+    'exposure': ('Exposure', 'ASI_EXPOSURE'),
+    'flip': ('Flip', 'ASI_FLIP'),
+    'gain': ('Gain', 'ASI_GAIN'),
+    'gamma': ('Gamma', 'ASI_GAMMA'),
+    'hardware_bin': ('HardwareBin', 'ASI_HARDWARE_BIN'),
+    'high_speed_mode': ('HighSpeedMode', 'ASI_HIGH_SPEED_MODE'),
+    'mono_bin': ('Mono bin', 'ASI_MONO_BIN'),  # Yes,really with a space
+    'temperature': ('Temperature', 'ASI_TEMPERATURE'),
+    'wb_blue': ('WB_B', 'ASI_WB_B'),
+    'wb_red': ('WB_R', 'ASI_WB_R'),
+}
 
 
 class Camera(object):
@@ -73,13 +91,13 @@ class Camera(object):
         self.camera.start_video_capture()
 
         # Read all camera controls defined in the config file
-        for c in controls:
-            cl = c.lower()
-            value = get_config_option(self.config, section, cl)
+        for setting in _settings_map:
+            value = get_config_option(self.config, section, setting)
             if value is not None:
-                default_value = controls[c]['DefaultValue']
-                control_type = getattr(zwoasi, 'ASI_' + c.upper())
-                logger.debug('set control value %s to %s', cl, value)
+                asi_control_name, asi_setting_name = _settings_map[setting]
+                default_value = controls[asi_control_name]['DefaultValue']
+                control_type = getattr(zwoasi, asi_setting_name)
+                logger.debug('set control value %s (%s) to %s', setting, asi_setting_name, value)
                 if value == 'auto':
                     self.camera.set_control_value(control_type, default_value, auto=True)
                 else:
