@@ -173,7 +173,7 @@ def timelapse(ffmpeg, start_time, end_time, step, filename_fstr, jitter=None, fr
     fade_in_alpha = my_linspace(0, 1, fade_in)
     fade_out_alpha = my_linspace(1, 0, fade_out)
     total_frames = int((et-st) / step)
-    fade_out_start = total_frames - fade_out
+    fade_out_start = total_frames - fade_out + 1
 
     while t < et:
         found = False
